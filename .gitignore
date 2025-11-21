@@ -1,5 +1,6 @@
 parser5.1.py
 *.json
+!.devcontainer/devcontainer.json
 *.pdf
 .venv
 __pycache__
