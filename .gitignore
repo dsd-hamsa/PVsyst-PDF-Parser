@@ -1,0 +1,5 @@
+parser5.1.py
+*.json
+*.pdf
+.venv
+__pycache__
