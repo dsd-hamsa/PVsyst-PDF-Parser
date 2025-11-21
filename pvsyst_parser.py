@@ -1,22 +1,10 @@
 #!/usr/bin/env python3
 """
-PVsyst PDF Parser V2 with Monthly Production
+PVsyst PDF Parser V1.0
 
 A comprehensive parser for PVsyst PDF reports that handles complex inverter/MPPT grouping
 notation and converts them to structured, readable formats with monthly production data.
 
-Key Features:
-- Handles complex inverter ranges like "INV02-05, 7,8 MPPT 1-5"
-- Extracts all sections and tables from PVsyst reports
-- Outputs clean text and structured JSON with separated configurations and associations
-- Expands grouped notation into individual inverter/MPPT combinations
-- Calculates monthly production for each inverter based on module allocation
-
-V2 Changes:
-- Separates array configurations from MPPT associations for cleaner JSON structure
-- Array Configurations: Technical specs for each array
-- Associations: Simple mapping of inverter MPPTs to array config IDs
-- Monthly Production: Module-based allocation of monthly energy production
 """
 
 import json
