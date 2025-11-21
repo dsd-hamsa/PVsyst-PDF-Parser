@@ -1,0 +1,820 @@
+PVsyst PDF Analysis Report (V2 with Monthly Production)
+============================================================
+
+SUMMARY
+--------------------
+Total Arrays Found: 10
+Total Expanded Combinations: 15
+Total Inverters: 5
+Sections Identified: 4
+MONTHLY PRODUCTION SUMMARY
+-----------------------------------
+INV01: 80.1 kWp, 130,246 kWh/year (1626 kWh/kWp)
+INV02: 74.7 kWp, 121,385 kWh/year (1625 kWh/kWp)
+INV03: 74.1 kWp, 120,499 kWh/year (1626 kWh/kWp)
+INV04: 74.1 kWp, 120,499 kWh/year (1626 kWh/kWp)
+INV05: 58.3 kWp, 94,804 kWh/year (1626 kWh/kWp)
+
+Total System: 361.3 kWp, 587,433 kWh/year
+
+INVERTER CONFIGURATION
+------------------------------
+This section groups arrays by inverter, showing MPPT configurations:
+
+INV01 (80.1 kWp)
+---------------
+  Array #1 - Array #1
+    MPPTs: MPPT 1
+    Configuration:
+      Array Id: 1
+      Original Block Text: Array #1 - INV 1 - 17 Modules/String
+Number of PV modules 51units Number of inverters 1 * MPPT 35% 0.3 unit
+Nominal (STC) 27.80kWp Total power 20.8kWac
+Modules 3 string x 17 In series
+At operating cond. (50°C) Operating voltage 200-850V
+Pmpp 25.51kWp Pnom ratio (DC:AC) 1.34
+U mpp 646V
+I mpp 39A
+
+      Inverter Ids: ['INV01']
+      Inverter Id: INV01
+      Number Of Modules: 51
+      Nominal Stc Kwp From Module: 27.795
+      Nominal Stc Kwp: 27.8
+      Strings: 3
+      Modules In Series: 17
+      Modules Config Text: Modules 3 string x 17
+      U Mpp V: 646.0
+      I Mpp A: 39.0
+      Mppt Count: 1
+      Mppt Share Percent: 35.0
+      Inverter Unit Fraction: 0.3
+      Orientation Id: 1
+      Tilt: 9.0
+      Azimuth Pvsyst Deg: 0.0
+      Azimuth Deg: 180.0
+      Azimuth Compass Deg: 180.0
+
+  Array #2 - Array #2
+    MPPTs: MPPT 2, MPPT 3
+    Configuration:
+      Array Id: 2
+      Original Block Text: Array #2 - INV 1 - 16 Modules/String
+Number of PV modules 96units Number of inverters 2 * MPPT 33% 0.7 unit
+Nominal (STC) 52.3kWp Total power 39.2kWac
+Modules 6 string x 16 In series
+At operating cond. (50°C) Operating voltage 200-850V
+Pmpp 48.0kWp Pnom ratio (DC:AC) 1.34
+U mpp 608V
+I mpp 79A
+
+      Inverter Ids: ['INV01']
+      Inverter Id: INV01
+      Number Of Modules: 96
+      Nominal Stc Kwp From Module: 52.32
+      Nominal Stc Kwp: 52.3
+      Strings: 6
+      Modules In Series: 16
+      Modules Config Text: Modules 6 string x 16
+      U Mpp V: 608.0
+      I Mpp A: 79.0
+      Mppt Count: 2
+      Mppt Share Percent: 33.0
+      Inverter Unit Fraction: 0.7
+      Orientation Id: 1
+      Tilt: 9.0
+      Azimuth Pvsyst Deg: 0.0
+      Azimuth Deg: 180.0
+      Azimuth Compass Deg: 180.0
+
+INV02 (74.7 kWp)
+---------------
+  Array #3 - Array #3
+    MPPTs: MPPT 1
+    Configuration:
+      Array Id: 3
+      Original Block Text: Array #3 - INV 2 - 18 Modules/String
+Number of PV modules 54units Number of inverters 1 * MPPT 39% 0.4 unit
+Nominal (STC) 29.43kWp Total power 23.6kWac
+Modules 3 string x 18 In series
+At operating cond. (50°C) Operating voltage 200-850V
+Pmpp 27.01kWp Pnom ratio (DC:AC) 1.24
+U mpp 684V
+I mpp 39A
+12/02/25 PVsyst Licensed to DSD Renewables (United states) 
+      Inverter Ids: ['INV02']
+      Inverter Id: INV02
+      Number Of Modules: 54
+      Nominal Stc Kwp From Module: 29.43
+      Nominal Stc Kwp: 29.43
+      Strings: 3
+      Modules In Series: 18
+      Modules Config Text: Modules 3 string x 18
+      U Mpp V: 684.0
+      I Mpp A: 39.0
+      Mppt Count: 1
+      Mppt Share Percent: 39.0
+      Inverter Unit Fraction: 0.4
+      Orientation Id: 1
+      Tilt: 9.0
+      Azimuth Pvsyst Deg: 0.0
+      Azimuth Deg: 180.0
+      Azimuth Compass Deg: 180.0
+
+  Array #4 - Array #4
+    MPPTs: MPPT 2
+    Configuration:
+      Array Id: 4
+      Original Block Text: Array #4 - INV 2 - 17 Modules/String
+Number of PV modules 51units Number of inverters 1 * MPPT 37% 0.4 unit
+Nominal (STC) 27.80kWp Total power 22.3kWac
+Modules 3 string x 17 In series
+At operating cond. (50°C) Operating voltage 200-850V
+Pmpp 25.51kWp Pnom ratio (DC:AC) 1.24
+U mpp 646V
+I mpp 39A
+
+      Inverter Ids: ['INV02']
+      Inverter Id: INV02
+      Number Of Modules: 51
+      Nominal Stc Kwp From Module: 27.795
+      Nominal Stc Kwp: 27.8
+      Strings: 3
+      Modules In Series: 17
+      Modules Config Text: Modules 3 string x 17
+      U Mpp V: 646.0
+      I Mpp A: 39.0
+      Mppt Count: 1
+      Mppt Share Percent: 37.0
+      Inverter Unit Fraction: 0.4
+      Orientation Id: 1
+      Tilt: 9.0
+      Azimuth Pvsyst Deg: 0.0
+      Azimuth Deg: 180.0
+      Azimuth Compass Deg: 180.0
+
+  Array #5 - Array #5
+    MPPTs: MPPT 3
+    Configuration:
+      Array Id: 5
+      Original Block Text: Array #5 - INV 2 - 16 Modules/String
+Number of PV modules 32units Number of inverters 1 * MPPT 23% 0.2 unit
+Nominal (STC) 17.44kWp Total power 14.0kWac
+Modules 2 string x 16 In series
+At operating cond. (50°C) Operating voltage 200-850V
+Pmpp 16.00kWp Pnom ratio (DC:AC) 1.24
+U mpp 608V
+I mpp 26A
+
+      Inverter Ids: ['INV02']
+      Inverter Id: INV02
+      Number Of Modules: 32
+      Nominal Stc Kwp From Module: 17.44
+      Nominal Stc Kwp: 17.44
+      Strings: 2
+      Modules In Series: 16
+      Modules Config Text: Modules 2 string x 16
+      U Mpp V: 608.0
+      I Mpp A: 26.0
+      Mppt Count: 1
+      Mppt Share Percent: 23.0
+      Inverter Unit Fraction: 0.2
+      Orientation Id: 1
+      Tilt: 9.0
+      Azimuth Pvsyst Deg: 0.0
+      Azimuth Deg: 180.0
+      Azimuth Compass Deg: 180.0
+
+INV03 (74.1 kWp)
+---------------
+  Array #6 - Array #6
+    MPPTs: MPPT 1, MPPT 2, MPPT 3
+    Configuration:
+      Array Id: 6
+      Original Block Text: Array #6 - INV 3
+Number of PV modules 136units Number of inverters 3 * MPPT 33% 1 unit
+Nominal (STC) 74.1kWp Total power 60.0kWac
+Modules 8 string x 17 In series
+At operating cond. (50°C) Operating voltage 200-850V
+Pmpp 68.0kWp Pnom ratio (DC:AC) 1.24
+U mpp 646V
+I mpp 105A
+
+      Inverter Ids: ['INV03']
+      Inverter Id: INV03
+      Number Of Modules: 136
+      Nominal Stc Kwp From Module: 74.12
+      Nominal Stc Kwp: 74.1
+      Strings: 8
+      Modules In Series: 17
+      Modules Config Text: Modules 8 string x 17
+      U Mpp V: 646.0
+      I Mpp A: 105.0
+      Mppt Count: 3
+      Mppt Share Percent: 33.0
+      Inverter Unit Fraction: 1.0
+      Orientation Id: 1
+      Tilt: 9.0
+      Azimuth Pvsyst Deg: 0.0
+      Azimuth Deg: 180.0
+      Azimuth Compass Deg: 180.0
+
+INV04 (74.1 kWp)
+---------------
+  Array #7 - Array #7
+    MPPTs: MPPT 1, MPPT 2, MPPT 3
+    Configuration:
+      Array Id: 7
+      Original Block Text: Array #7 - INV 4
+Number of PV modules 136units Number of inverters 3 * MPPT 33% 1 unit
+Nominal (STC) 74.1kWp Total power 60.0kWac
+Modules 8 string x 17 In series
+At operating cond. (50°C) Operating voltage 200-850V
+Pmpp 68.0kWp Pnom ratio (DC:AC) 1.24
+U mpp 646V
+I mpp 105A
+PV module Inverter
+Manufacturer JA Solar Manufacturer Chint Power Systems
+Model JAM72D30-545/MB Model CPS SCA50KTL-DO/US-480 V2.0
+(Custom parameters definition) (Custom parameters definition)
+Unit Nom. Power 545Wp Unit Nom. Power 50.0kWac
+Number of PV modules 107units Number of inverters 1unit
+Nominal (STC) 58.3kWp Total power 50.0kWac
+
+      Inverter Ids: ['INV04']
+      Inverter Id: INV04
+      Number Of Modules: 136
+      Nominal Stc Kwp From Module: 74.12
+      Nominal Stc Kwp: 74.1
+      Strings: 8
+      Modules In Series: 17
+      Modules Config Text: Modules 8 string x 17
+      U Mpp V: 646.0
+      I Mpp A: 105.0
+      Mppt Count: 3
+      Mppt Share Percent: 33.0
+      Inverter Unit Fraction: 1.0
+      Orientation Id: 1
+      Tilt: 9.0
+      Azimuth Pvsyst Deg: 0.0
+      Azimuth Deg: 180.0
+      Azimuth Compass Deg: 180.0
+
+INV05 (58.3 kWp)
+---------------
+  Array #10 - Array #10
+    MPPTs: MPPT 3
+    Configuration:
+      Array Id: 10
+      Original Block Text: Array #10 - INV 5 - 17 Modules/String
+Number of PV modules 34units Number of inverters 1 * MPPT 32% 0.3 unit
+Nominal (STC) 18.53kWp Total power 15.9kWac
+Modules 2 string x 17 In series
+At operating cond. (50°C) Operating voltage 200-850V
+Pmpp 17.00kWp Pnom ratio (DC:AC) 1.17
+U mpp 646V
+I mpp 26A
+Total PV power Total inverter power
+Nominal (STC) 361kWp Total power 290kWac
+Total 663modules Number of inverters 5units
+Module area 1713m² Pnom ratio 1.25
+Power sharing defined
+Array losses
+Array Soiling Losses
+Average loss Fraction 6.4%
+Jan. Feb. Mar. Apr. May June July Aug. Sep. Oct. Nov. Dec.
+0.8% 0.8% 2.3% 3.8% 5.3% 6.8% 8.3% 9.8% 11.3% 12.8% 14.3% 0.8%
+Thermal Loss factor LID - Light Induced Degradation Module Quality Loss
+Module temperature according to irradiance Loss Fraction 1.0% Loss Fraction -0.2%
+Uc (const) 23.0W/m²K
+Uv (wind) 0.0W/m²K/m/s
+Module mismatch losses
+Loss Fraction 1.0% at MPP
+IAM loss factor
+Incidence effect (IAM): User defined profile
+0° 30° 50° 65° 70° 75° 80° 85° 90°
+1.000 1.000 0.989 0.945 0.890 0.821 0.681 0.439 0.000
+DC wiring losses
+Global wiring resistance 10mΩ
+Loss Fraction 1.2% at STC
+12/02/25 PVsyst Licensed to DSD Renewables (United states) 
+      Inverter Ids: ['INV05']
+      Inverter Id: INV05
+      Number Of Modules: 34
+      Nominal Stc Kwp From Module: 18.53
+      Nominal Stc Kwp: 18.53
+      Strings: 2
+      Modules In Series: 17
+      Modules Config Text: Modules 2 string x 17
+      U Mpp V: 646.0
+      I Mpp A: 26.0
+      Mppt Count: 1
+      Mppt Share Percent: 32.0
+      Inverter Unit Fraction: 0.3
+      Orientation Id: 1
+      Tilt: 9.0
+      Azimuth Pvsyst Deg: 0.0
+      Azimuth Deg: 180.0
+      Azimuth Compass Deg: 180.0
+
+  Array #8 - Array #8
+    MPPTs: MPPT 1
+    Configuration:
+      Array Id: 8
+      Original Block Text: Array #8 - INV 5 - 14 Modules/String
+Number of PV modules 28units Number of inverters 1 * MPPT 26% 0.3 unit
+Nominal (STC) 15.26kWp Total power 13.1kWac
+Modules 2 string x 14 In series
+At operating cond. (50°C) Operating voltage 200-850V
+Pmpp 14.00kWp Pnom ratio (DC:AC) 1.17
+U mpp 532V
+I mpp 26A
+12/02/25 PVsyst Licensed to DSD Renewables (United states) 
+      Inverter Ids: ['INV05']
+      Inverter Id: INV05
+      Number Of Modules: 28
+      Nominal Stc Kwp From Module: 15.26
+      Nominal Stc Kwp: 15.26
+      Strings: 2
+      Modules In Series: 14
+      Modules Config Text: Modules 2 string x 14
+      U Mpp V: 532.0
+      I Mpp A: 26.0
+      Mppt Count: 1
+      Mppt Share Percent: 26.0
+      Inverter Unit Fraction: 0.3
+      Orientation Id: 1
+      Tilt: 9.0
+      Azimuth Pvsyst Deg: 0.0
+      Azimuth Deg: 180.0
+      Azimuth Compass Deg: 180.0
+
+  Array #9 - Array #9
+    MPPTs: MPPT 2
+    Configuration:
+      Array Id: 9
+      Original Block Text: Array #9 - INV 5 - 15 Modules/String
+Number of PV modules 45units Number of inverters 1 * MPPT 42% 0.4 unit
+Nominal (STC) 24.53kWp Total power 21.0kWac
+Modules 3 string x 15 In series
+At operating cond. (50°C) Operating voltage 200-850V
+Pmpp 22.51kWp Pnom ratio (DC:AC) 1.17
+U mpp 570V
+I mpp 39A
+
+      Inverter Ids: ['INV05']
+      Inverter Id: INV05
+      Number Of Modules: 45
+      Nominal Stc Kwp From Module: 24.525
+      Nominal Stc Kwp: 24.53
+      Strings: 3
+      Modules In Series: 15
+      Modules Config Text: Modules 3 string x 15
+      U Mpp V: 570.0
+      I Mpp A: 39.0
+      Mppt Count: 1
+      Mppt Share Percent: 42.0
+      Inverter Unit Fraction: 0.4
+      Orientation Id: 1
+      Tilt: 9.0
+      Azimuth Pvsyst Deg: 0.0
+      Azimuth Deg: 180.0
+      Azimuth Compass Deg: 180.0
+
+INDIVIDUAL ARRAY DETAILS
+------------------------------
+Array #1
+  Original Notation: Array #1
+  Expanded to 1 combinations:
+    INV01: MPPT 1
+  Configuration Details:
+    Array Id: 1
+    Original Block Text: Array #1 - INV 1 - 17 Modules/String
+Number of PV modules 51units Number of inverters 1 * MPPT 35% 0.3 unit
+Nominal (STC) 27.80kWp Total power 20.8kWac
+Modules 3 string x 17 In series
+At operating cond. (50°C) Operating voltage 200-850V
+Pmpp 25.51kWp Pnom ratio (DC:AC) 1.34
+U mpp 646V
+I mpp 39A
+
+    Inverter Ids: ['INV01']
+    Inverter Id: INV01
+    Number Of Modules: 51
+    Nominal Stc Kwp From Module: 27.795
+    Nominal Stc Kwp: 27.8
+    Strings: 3
+    Modules In Series: 17
+    Modules Config Text: Modules 3 string x 17
+    U Mpp V: 646.0
+    I Mpp A: 39.0
+    Mppt Count: 1
+    Mppt Share Percent: 35.0
+    Inverter Unit Fraction: 0.3
+    Orientation Id: 1
+    Tilt: 9.0
+    Azimuth Pvsyst Deg: 0.0
+    Azimuth Deg: 180.0
+    Azimuth Compass Deg: 180.0
+
+Array #2
+  Original Notation: Array #2
+  Expanded to 2 combinations:
+    INV01: MPPT 2, MPPT 3
+  Configuration Details:
+    Array Id: 2
+    Original Block Text: Array #2 - INV 1 - 16 Modules/String
+Number of PV modules 96units Number of inverters 2 * MPPT 33% 0.7 unit
+Nominal (STC) 52.3kWp Total power 39.2kWac
+Modules 6 string x 16 In series
+At operating cond. (50°C) Operating voltage 200-850V
+Pmpp 48.0kWp Pnom ratio (DC:AC) 1.34
+U mpp 608V
+I mpp 79A
+
+    Inverter Ids: ['INV01']
+    Inverter Id: INV01
+    Number Of Modules: 96
+    Nominal Stc Kwp From Module: 52.32
+    Nominal Stc Kwp: 52.3
+    Strings: 6
+    Modules In Series: 16
+    Modules Config Text: Modules 6 string x 16
+    U Mpp V: 608.0
+    I Mpp A: 79.0
+    Mppt Count: 2
+    Mppt Share Percent: 33.0
+    Inverter Unit Fraction: 0.7
+    Orientation Id: 1
+    Tilt: 9.0
+    Azimuth Pvsyst Deg: 0.0
+    Azimuth Deg: 180.0
+    Azimuth Compass Deg: 180.0
+
+Array #3
+  Original Notation: Array #3
+  Expanded to 1 combinations:
+    INV02: MPPT 1
+  Configuration Details:
+    Array Id: 3
+    Original Block Text: Array #3 - INV 2 - 18 Modules/String
+Number of PV modules 54units Number of inverters 1 * MPPT 39% 0.4 unit
+Nominal (STC) 29.43kWp Total power 23.6kWac
+Modules 3 string x 18 In series
+At operating cond. (50°C) Operating voltage 200-850V
+Pmpp 27.01kWp Pnom ratio (DC:AC) 1.24
+U mpp 684V
+I mpp 39A
+12/02/25 PVsyst Licensed to DSD Renewables (United states) 
+    Inverter Ids: ['INV02']
+    Inverter Id: INV02
+    Number Of Modules: 54
+    Nominal Stc Kwp From Module: 29.43
+    Nominal Stc Kwp: 29.43
+    Strings: 3
+    Modules In Series: 18
+    Modules Config Text: Modules 3 string x 18
+    U Mpp V: 684.0
+    I Mpp A: 39.0
+    Mppt Count: 1
+    Mppt Share Percent: 39.0
+    Inverter Unit Fraction: 0.4
+    Orientation Id: 1
+    Tilt: 9.0
+    Azimuth Pvsyst Deg: 0.0
+    Azimuth Deg: 180.0
+    Azimuth Compass Deg: 180.0
+
+Array #4
+  Original Notation: Array #4
+  Expanded to 1 combinations:
+    INV02: MPPT 2
+  Configuration Details:
+    Array Id: 4
+    Original Block Text: Array #4 - INV 2 - 17 Modules/String
+Number of PV modules 51units Number of inverters 1 * MPPT 37% 0.4 unit
+Nominal (STC) 27.80kWp Total power 22.3kWac
+Modules 3 string x 17 In series
+At operating cond. (50°C) Operating voltage 200-850V
+Pmpp 25.51kWp Pnom ratio (DC:AC) 1.24
+U mpp 646V
+I mpp 39A
+
+    Inverter Ids: ['INV02']
+    Inverter Id: INV02
+    Number Of Modules: 51
+    Nominal Stc Kwp From Module: 27.795
+    Nominal Stc Kwp: 27.8
+    Strings: 3
+    Modules In Series: 17
+    Modules Config Text: Modules 3 string x 17
+    U Mpp V: 646.0
+    I Mpp A: 39.0
+    Mppt Count: 1
+    Mppt Share Percent: 37.0
+    Inverter Unit Fraction: 0.4
+    Orientation Id: 1
+    Tilt: 9.0
+    Azimuth Pvsyst Deg: 0.0
+    Azimuth Deg: 180.0
+    Azimuth Compass Deg: 180.0
+
+Array #5
+  Original Notation: Array #5
+  Expanded to 1 combinations:
+    INV02: MPPT 3
+  Configuration Details:
+    Array Id: 5
+    Original Block Text: Array #5 - INV 2 - 16 Modules/String
+Number of PV modules 32units Number of inverters 1 * MPPT 23% 0.2 unit
+Nominal (STC) 17.44kWp Total power 14.0kWac
+Modules 2 string x 16 In series
+At operating cond. (50°C) Operating voltage 200-850V
+Pmpp 16.00kWp Pnom ratio (DC:AC) 1.24
+U mpp 608V
+I mpp 26A
+
+    Inverter Ids: ['INV02']
+    Inverter Id: INV02
+    Number Of Modules: 32
+    Nominal Stc Kwp From Module: 17.44
+    Nominal Stc Kwp: 17.44
+    Strings: 2
+    Modules In Series: 16
+    Modules Config Text: Modules 2 string x 16
+    U Mpp V: 608.0
+    I Mpp A: 26.0
+    Mppt Count: 1
+    Mppt Share Percent: 23.0
+    Inverter Unit Fraction: 0.2
+    Orientation Id: 1
+    Tilt: 9.0
+    Azimuth Pvsyst Deg: 0.0
+    Azimuth Deg: 180.0
+    Azimuth Compass Deg: 180.0
+
+Array #6
+  Original Notation: Array #6
+  Expanded to 3 combinations:
+    INV03: MPPT 1, MPPT 2, MPPT 3
+  Configuration Details:
+    Array Id: 6
+    Original Block Text: Array #6 - INV 3
+Number of PV modules 136units Number of inverters 3 * MPPT 33% 1 unit
+Nominal (STC) 74.1kWp Total power 60.0kWac
+Modules 8 string x 17 In series
+At operating cond. (50°C) Operating voltage 200-850V
+Pmpp 68.0kWp Pnom ratio (DC:AC) 1.24
+U mpp 646V
+I mpp 105A
+
+    Inverter Ids: ['INV03']
+    Inverter Id: INV03
+    Number Of Modules: 136
+    Nominal Stc Kwp From Module: 74.12
+    Nominal Stc Kwp: 74.1
+    Strings: 8
+    Modules In Series: 17
+    Modules Config Text: Modules 8 string x 17
+    U Mpp V: 646.0
+    I Mpp A: 105.0
+    Mppt Count: 3
+    Mppt Share Percent: 33.0
+    Inverter Unit Fraction: 1.0
+    Orientation Id: 1
+    Tilt: 9.0
+    Azimuth Pvsyst Deg: 0.0
+    Azimuth Deg: 180.0
+    Azimuth Compass Deg: 180.0
+
+Array #7
+  Original Notation: Array #7
+  Expanded to 3 combinations:
+    INV04: MPPT 1, MPPT 2, MPPT 3
+  Configuration Details:
+    Array Id: 7
+    Original Block Text: Array #7 - INV 4
+Number of PV modules 136units Number of inverters 3 * MPPT 33% 1 unit
+Nominal (STC) 74.1kWp Total power 60.0kWac
+Modules 8 string x 17 In series
+At operating cond. (50°C) Operating voltage 200-850V
+Pmpp 68.0kWp Pnom ratio (DC:AC) 1.24
+U mpp 646V
+I mpp 105A
+PV module Inverter
+Manufacturer JA Solar Manufacturer Chint Power Systems
+Model JAM72D30-545/MB Model CPS SCA50KTL-DO/US-480 V2.0
+(Custom parameters definition) (Custom parameters definition)
+Unit Nom. Power 545Wp Unit Nom. Power 50.0kWac
+Number of PV modules 107units Number of inverters 1unit
+Nominal (STC) 58.3kWp Total power 50.0kWac
+
+    Inverter Ids: ['INV04']
+    Inverter Id: INV04
+    Number Of Modules: 136
+    Nominal Stc Kwp From Module: 74.12
+    Nominal Stc Kwp: 74.1
+    Strings: 8
+    Modules In Series: 17
+    Modules Config Text: Modules 8 string x 17
+    U Mpp V: 646.0
+    I Mpp A: 105.0
+    Mppt Count: 3
+    Mppt Share Percent: 33.0
+    Inverter Unit Fraction: 1.0
+    Orientation Id: 1
+    Tilt: 9.0
+    Azimuth Pvsyst Deg: 0.0
+    Azimuth Deg: 180.0
+    Azimuth Compass Deg: 180.0
+
+Array #8
+  Original Notation: Array #8
+  Expanded to 1 combinations:
+    INV05: MPPT 1
+  Configuration Details:
+    Array Id: 8
+    Original Block Text: Array #8 - INV 5 - 14 Modules/String
+Number of PV modules 28units Number of inverters 1 * MPPT 26% 0.3 unit
+Nominal (STC) 15.26kWp Total power 13.1kWac
+Modules 2 string x 14 In series
+At operating cond. (50°C) Operating voltage 200-850V
+Pmpp 14.00kWp Pnom ratio (DC:AC) 1.17
+U mpp 532V
+I mpp 26A
+12/02/25 PVsyst Licensed to DSD Renewables (United states) 
+    Inverter Ids: ['INV05']
+    Inverter Id: INV05
+    Number Of Modules: 28
+    Nominal Stc Kwp From Module: 15.26
+    Nominal Stc Kwp: 15.26
+    Strings: 2
+    Modules In Series: 14
+    Modules Config Text: Modules 2 string x 14
+    U Mpp V: 532.0
+    I Mpp A: 26.0
+    Mppt Count: 1
+    Mppt Share Percent: 26.0
+    Inverter Unit Fraction: 0.3
+    Orientation Id: 1
+    Tilt: 9.0
+    Azimuth Pvsyst Deg: 0.0
+    Azimuth Deg: 180.0
+    Azimuth Compass Deg: 180.0
+
+Array #9
+  Original Notation: Array #9
+  Expanded to 1 combinations:
+    INV05: MPPT 2
+  Configuration Details:
+    Array Id: 9
+    Original Block Text: Array #9 - INV 5 - 15 Modules/String
+Number of PV modules 45units Number of inverters 1 * MPPT 42% 0.4 unit
+Nominal (STC) 24.53kWp Total power 21.0kWac
+Modules 3 string x 15 In series
+At operating cond. (50°C) Operating voltage 200-850V
+Pmpp 22.51kWp Pnom ratio (DC:AC) 1.17
+U mpp 570V
+I mpp 39A
+
+    Inverter Ids: ['INV05']
+    Inverter Id: INV05
+    Number Of Modules: 45
+    Nominal Stc Kwp From Module: 24.525
+    Nominal Stc Kwp: 24.53
+    Strings: 3
+    Modules In Series: 15
+    Modules Config Text: Modules 3 string x 15
+    U Mpp V: 570.0
+    I Mpp A: 39.0
+    Mppt Count: 1
+    Mppt Share Percent: 42.0
+    Inverter Unit Fraction: 0.4
+    Orientation Id: 1
+    Tilt: 9.0
+    Azimuth Pvsyst Deg: 0.0
+    Azimuth Deg: 180.0
+    Azimuth Compass Deg: 180.0
+
+Array #10
+  Original Notation: Array #10
+  Expanded to 1 combinations:
+    INV05: MPPT 3
+  Configuration Details:
+    Array Id: 10
+    Original Block Text: Array #10 - INV 5 - 17 Modules/String
+Number of PV modules 34units Number of inverters 1 * MPPT 32% 0.3 unit
+Nominal (STC) 18.53kWp Total power 15.9kWac
+Modules 2 string x 17 In series
+At operating cond. (50°C) Operating voltage 200-850V
+Pmpp 17.00kWp Pnom ratio (DC:AC) 1.17
+U mpp 646V
+I mpp 26A
+Total PV power Total inverter power
+Nominal (STC) 361kWp Total power 290kWac
+Total 663modules Number of inverters 5units
+Module area 1713m² Pnom ratio 1.25
+Power sharing defined
+Array losses
+Array Soiling Losses
+Average loss Fraction 6.4%
+Jan. Feb. Mar. Apr. May June July Aug. Sep. Oct. Nov. Dec.
+0.8% 0.8% 2.3% 3.8% 5.3% 6.8% 8.3% 9.8% 11.3% 12.8% 14.3% 0.8%
+Thermal Loss factor LID - Light Induced Degradation Module Quality Loss
+Module temperature according to irradiance Loss Fraction 1.0% Loss Fraction -0.2%
+Uc (const) 23.0W/m²K
+Uv (wind) 0.0W/m²K/m/s
+Module mismatch losses
+Loss Fraction 1.0% at MPP
+IAM loss factor
+Incidence effect (IAM): User defined profile
+0° 30° 50° 65° 70° 75° 80° 85° 90°
+1.000 1.000 0.989 0.945 0.890 0.821 0.681 0.439 0.000
+DC wiring losses
+Global wiring resistance 10mΩ
+Loss Fraction 1.2% at STC
+12/02/25 PVsyst Licensed to DSD Renewables (United states) 
+    Inverter Ids: ['INV05']
+    Inverter Id: INV05
+    Number Of Modules: 34
+    Nominal Stc Kwp From Module: 18.53
+    Nominal Stc Kwp: 18.53
+    Strings: 2
+    Modules In Series: 17
+    Modules Config Text: Modules 2 string x 17
+    U Mpp V: 646.0
+    I Mpp A: 26.0
+    Mppt Count: 1
+    Mppt Share Percent: 32.0
+    Inverter Unit Fraction: 0.3
+    Orientation Id: 1
+    Tilt: 9.0
+    Azimuth Pvsyst Deg: 0.0
+    Azimuth Deg: 180.0
+    Azimuth Compass Deg: 180.0
+
+IDENTIFIED SECTIONS
+-------------------------
+Project Summary
+  Found at 4 location(s)
+  Matches: Project summary, System summary, Results summary, results summary
+
+PV Array Characteristics
+  Found at 4 location(s)
+  Matches: PV Array Characteristics, PV Array Characteristics, PV Array Characteristics, PV Array Characteristics
+
+System Losses
+  Found at 3 location(s)
+  Matches: System losses, Loss diagram, Loss diagram
+
+Main Results
+  Found at 3 location(s)
+  Matches: Main results, Main results, main results
+
+TABLES SUMMARY
+--------------------
+Page 7
+  Table 1 (lattice): 3 rows, 12 columns
+  Table 2 (lattice): 2 rows, 1 columns
+  Table 3 (lattice): 8 rows, 15 columns
+  Table 4 (stream): 14 rows, 13 columns
+
+Page 8
+  Table 1 (lattice): 3 rows, 3 columns
+  Table 2 (stream): 11 rows, 3 columns
+
+Page 9
+  Table 1 (lattice): 1 rows, 17 columns
+  Table 2 (lattice): 1 rows, 25 columns
+  Table 3 (lattice): 3 rows, 9 columns
+  Table 4 (lattice): 7 rows, 50 columns
+  Table 5 (stream): 16 rows, 9 columns
+
+Page 10
+  Table 1 (lattice): 3 rows, 2 columns
+  Table 2 (stream): 29 rows, 3 columns
+
+Page 11
+  Table 1 (lattice): 1 rows, 2 columns
+  Table 2 (lattice): 5 rows, 4 columns
+  Table 3 (stream): 10 rows, 3 columns
+
+Page 1
+  Table 1 (stream): 7 rows, 1 columns
+
+Page 2
+  Table 1 (stream): 32 rows, 8 columns
+
+Page 3
+  Table 1 (stream): 16 rows, 6 columns
+  Table 2 (stream): 16 rows, 6 columns
+
+Page 4
+  Table 1 (stream): 49 rows, 6 columns
+
+Page 5
+  Table 1 (stream): 23 rows, 6 columns
+
+Page 6
+  Table 1 (stream): 24 rows, 6 columns
+

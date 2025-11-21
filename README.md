@@ -104,11 +104,25 @@ curl -X POST "http://localhost:8000/api/parse" \
   },
   "array_configurations": {
     "1": {
-      "number_of_modules": 200,
-      "nominal_stc_kwp": 119.0,
-      "strings": 5,
-      "modules_in_series": 40,
-      "tilt": 30.0,
+      "array_id": "1",
+      "inverter_ids": [
+        "INV01"
+      ],
+      "inverter_id": "INV01",
+      "mppt_count": 1,
+      "mppt_share_percent": 35.0,
+      "inverter_unit_fraction": 0.3,
+      "number_of_modules": 51,
+      "nominal_stc_kwp_from_module": 27.795,
+      "nominal_stc_kwp": 27.8,
+      "strings": 3,
+      "modules_in_series": 17,
+      "u_mpp_v": 646.0,
+      "i_mpp_a": 39.0,
+      "orientation_id": 1,
+      "tilt": 9.0,
+      "azimuth_pvsyst_deg": 0.0,
+      "azimuth_deg": 180.0,
       "azimuth_compass_deg": 180.0
     }
   },
@@ -117,18 +131,29 @@ curl -X POST "http://localhost:8000/api/parse" \
       "MPPT 1": {
         "array_id": "1",
         "strings": 3,
-        "modules": 120,
-        "dc_kwp": 71.4
+        "modules": 51,
+        "dc_kwp": 27.795
       }
     }
   },
   "inverter_summary": {
     "INV01": {
-      "capacity_kwp": 75.2,
-      "annual_production_kwh": 112500,
+      "capacity_kwp": 80.1,
+      "annual_production_kwh": 130246.0,
+      "specific_production_kwh_per_kwp": 1626.0,
       "monthly_production": {
-        "January": 8500,
-        "February": 9200
+        "January": 7717.0,
+        "February": 8528.0,
+        "March": 11929.0,
+        "April": 13186.0,
+        "May": 13777.0,
+        "June": 13123.0,
+        "July": 14111.0,
+        "August": 13440.0,
+        "September": 11136.0,
+        "October": 9208.0,
+        "November": 7144.0,
+        "December": 6947.0
       }
     }
   }
