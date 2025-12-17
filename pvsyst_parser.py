@@ -7,7 +7,7 @@ notation and converts them to structured, readable formats with monthly producti
 
 Key Features:
 - Handles complex inverter ranges like "INV02-05, 7,8 MPPT 1-5"
-- Extracts all sections and tables from PVsyst reports
+- Extracts all sections from PVsyst reports
 - Outputs clean text and structured JSON with separated configurations and associations
 - Expands grouped notation into individual inverter/MPPT combinations
 - Calculates monthly production for each inverter based on module allocation
@@ -22,6 +22,7 @@ V2 Changes:
 import json
 import re
 import sys
+import warnings
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Tuple, Set
 import camelot
@@ -35,7 +36,6 @@ class PVsystParser:
     def __init__(self):
         """Initialize the parser."""
         self.sections = {}
-        self.tables = {}
         self.arrays = {}
         self.expanded_arrays = []
         self.monthly_production = {}
@@ -47,6 +47,9 @@ class PVsystParser:
         self.inverter_info = {}
         self.associations = {}
         self.inverter_summary = {}
+        self.section_contents = {}
+        self.array_losses = {}
+        self.tables = {}
 
     def clean_nom_power(self, power_str: str) -> Optional[float]:
         """
@@ -186,52 +189,79 @@ class PVsystParser:
 
         orientations: Dict[str, Dict[str, Any]] = {}
 
-        # Find each Orientation #n occurrence in order
-        for m in re.finditer(r"Orientation\s*#\s*(\d+)", all_text, re.IGNORECASE):
-            ori_id = m.group(1)
+        # Find all Orientation #n
+        ori_matches = list(re.finditer(r"Orientation\s*#?\s*(\d+)", all_text, re.IGNORECASE))
+        print(f"  Found {len(ori_matches)} Orientation matches")
 
-            # If we've already captured this orientation, skip later duplicates
+        # Find all Tilt/Azimuth
+        tilt_matches = list(re.finditer(r"Tilt\s*[/]?\s*Azimuth\s*([-\d.]+)\s*[/]\s*([-\d.]+)°?", all_text, re.IGNORECASE))
+        print(f"  Found {len(tilt_matches)} Tilt/Azimuth matches")
+        if tilt_matches:
+            print(f"  First tilt match: {tilt_matches[0].group(0)} at pos {tilt_matches[0].start()}")
+
+        # Associate closest Tilt/Azimuth to each Orientation
+        for ori_m in ori_matches:
+            ori_id = ori_m.group(1)
+            ori_pos = ori_m.start()
+
+            # Find the closest Tilt/Azimuth (before or after)
+            closest_tilt = None
+            min_dist = float('inf')
+            for tilt_m in tilt_matches:
+                dist = abs(tilt_m.start() - ori_pos)
+                if dist < min_dist:
+                    min_dist = dist
+                    closest_tilt = tilt_m
+
+            if closest_tilt:
+                tilt = float(closest_tilt.group(1))
+                az_pv = float(closest_tilt.group(2))
+                az_compass = self.pvsyst_azimuth_to_compass(az_pv)
+
+                orientations[ori_id] = {
+                    "tilt": tilt,
+                    "azimuth_pvsyst_deg": az_pv,
+                    "azimuth_deg": az_compass,
+                    "azimuth_compass_deg": az_compass,
+                }
+
+        # If no associations found, try the old way for any remaining orientations
+        for m in re.finditer(r"Orientation\s*#?\s*(\d+)", all_text, re.IGNORECASE):
+            ori_id = m.group(1)
             if ori_id in orientations:
                 continue
 
             # Look at a local window after this occurrence
             window = all_text[m.start() : m.start() + 800]
 
-            # Tilt/Azimuth 9 / 0°
+            # Try various patterns for Tilt/Azimuth
+            tilt_m = None
+            # Pattern 1: Tilt/Azimuth 17 / 0°
             tilt_m = re.search(
-                r"Tilt/Azimuth\s*([-\d.]+)\s*/\s*([-\d.]+)°", window, re.IGNORECASE
+                r"Tilt\s*[/]?\s*Azimuth\s*([-\d.]+)\s*[/]\s*([-\d.]+)°?", window, re.IGNORECASE
             )
-
-            # A short "description" right after Orientation #n
-            desc_m = re.search(
-                r"Orientation\s*#\s*"
-                + re.escape(ori_id)
-                + r"\s*(.*?)(?:\n|Tilt/Azimuth)",
-                window,
-                re.IGNORECASE,
-            )
-
-            ori_data: Dict[str, Any] = {}
+            if not tilt_m:
+                # Pattern 2: Tilt 9 / Azimuth 0°
+                tilt_m = re.search(
+                    r"Tilt\s*([-\d.]+)[^\d]*Azimuth\s*([-\d.]+)°?", window, re.IGNORECASE
+                )
+            if not tilt_m:
+                # Pattern 3: Tilt: 9, Azimuth: 0
+                tilt_m = re.search(
+                    r"Tilt[:\s]*([-\d.]+)[^\d]*Azimuth[:\s]*([-\d.]+)", window, re.IGNORECASE
+                )
 
             if tilt_m:
                 tilt = float(tilt_m.group(1))
                 az_pv = float(tilt_m.group(2))
                 az_compass = self.pvsyst_azimuth_to_compass(az_pv)
 
-                ori_data["tilt"] = tilt
-                ori_data["azimuth_pvsyst_deg"] = az_pv
-                ori_data["azimuth_deg"] = az_compass
-                ori_data["azimuth_compass_deg"] = az_compass
-
-            if desc_m:
-                desc = desc_m.group(1).strip()
-                if desc:
-                    ori_data["description"] = desc
-
-            # Keep a small snippet for debugging / inspection
-            ori_data["raw_snippet"] = window[:200]
-
-            orientations[ori_id] = ori_data
+                orientations[ori_id] = {
+                    "tilt": tilt,
+                    "azimuth_pvsyst_deg": az_pv,
+                    "azimuth_deg": az_compass,
+                    "azimuth_compass_deg": az_compass,
+                }
 
         print(f"    Found {len(orientations)} orientations")
         return orientations
@@ -374,61 +404,6 @@ class PVsystParser:
 
         return combos
 
-
-    def extract_tables(self, pdf_path: str) -> Dict[int, List[Dict]]:
-        """Extract tables from PDF using camelot."""
-        tables_by_page = {}
-
-        print("  Extracting tables with camelot...")
-
-        # Try lattice first (ruled tables)
-        try:
-            latt = camelot.read_pdf(pdf_path, pages="all", flavor="lattice")
-            for t in latt:
-                page_num = t.page
-                if page_num not in tables_by_page:
-                    tables_by_page[page_num] = []
-
-                # Convert DataFrame to structured format
-                table_data = {
-                    "method": "lattice",
-                    "accuracy": t.accuracy,
-                    "whitespace": t.whitespace,
-                    "header": [str(col) for col in t.df.columns],
-                    "rows": [
-                        list(map(str, row)) for row in t.df.fillna("").values.tolist()
-                    ],
-                }
-                tables_by_page[page_num].append(table_data)
-
-        except Exception as e:
-            print(f"    Lattice extraction failed: {e}")
-
-        # Try stream as fallback
-        try:
-            stream = camelot.read_pdf(pdf_path, pages="all", flavor="stream")
-            for t in stream:
-                page_num = t.page
-                if page_num not in tables_by_page:
-                    tables_by_page[page_num] = []
-
-                # Convert DataFrame to structured format
-                table_data = {
-                    "method": "stream",
-                    "accuracy": t.accuracy,
-                    "whitespace": t.whitespace,
-                    "header": [str(col) for col in t.df.columns],
-                    "rows": [
-                        list(map(str, row)) for row in t.df.fillna("").values.tolist()
-                    ],
-                }
-                tables_by_page[page_num].append(table_data)
-
-        except Exception as e:
-            print(f"    Stream extraction failed: {e}")
-
-        return tables_by_page
-
     def extract_text_blocks(self, pdf_path: str) -> Dict[int, Dict]:
         """Extract text blocks and key-value pairs from PDF."""
         blocks = {}
@@ -471,6 +446,7 @@ class PVsystParser:
             "Project Summary": r"Project summary|System summary|Results summary",
             "PV Array Characteristics": r"PV Array Characteristics",
             "System Losses": r"System losses|Loss diagram",
+            "Array Losses": r"Array losses",
             "Main Results": r"Main results",
         }
 
@@ -484,6 +460,224 @@ class PVsystParser:
                 }
 
         return sections
+
+    def extract_section_contents(self, blocks: Dict[int, Dict], sections: Dict[str, Dict]) -> Dict[str, List[str]]:
+        """Extract full text content for each identified section."""
+        # Combine all text
+        all_text = ""
+        for _, page_data in blocks.items():
+            all_text += page_data.get("full_text", "") + "\n"
+
+        section_contents = {}
+        # Collect all section start positions with names
+        all_starts = []
+        for sec_name, sec_data in sections.items():
+            for pos in sec_data["start_positions"]:
+                all_starts.append((pos, sec_name))
+        all_starts.sort()  # Sort by position
+
+        for i, (pos, sec_name) in enumerate(all_starts):
+            start = pos
+            end = all_starts[i+1][0] if i+1 < len(all_starts) else len(all_text)
+            content = all_text[start:end].strip()
+            if sec_name not in section_contents:
+                section_contents[sec_name] = []
+            section_contents[sec_name].append(content)
+
+        return section_contents
+
+    def parse_array_losses_section(self, content: str) -> Dict[str, Any]:
+        parsed = {}
+        lines = content.splitlines()
+
+        sections = {}
+        sections["array_losses"] = lines  # the whole section
+        current_section = None
+        current_lines = []
+
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+            # Check for known headers
+            if re.search(r"Array Soiling Losses", line, re.IGNORECASE):
+                if current_section:
+                    sections[current_section] = current_lines
+                current_section = "soiling_losses"
+                current_lines = [line]
+            elif re.search(r"Thermal Loss factor", line, re.IGNORECASE):
+                if current_section:
+                    sections[current_section] = current_lines
+                current_section = "thermal_losses"
+                current_lines = [line]
+            elif re.search(r"Module mismatch losses", line, re.IGNORECASE):
+                if current_section:
+                    sections[current_section] = current_lines
+                current_section = "module_mismatch_losses"
+                current_lines = [line]
+            elif re.search(r"IAM loss factor", line, re.IGNORECASE):
+                if current_section:
+                    sections[current_section] = current_lines
+                current_section = "iam_losses"
+                current_lines = [line]
+
+            elif re.search(r"AC wiring losses", line, re.IGNORECASE):
+                if current_section:
+                    sections[current_section] = current_lines
+                current_section = "ac_wiring_losses"
+                current_lines = [line]
+            else:
+                current_lines.append(line)
+
+        if current_section:
+            sections[current_section] = current_lines
+
+        # Parse dc_wiring_losses from the array_losses section
+        if "array_losses" in sections:
+            parsed["dc_wiring_losses"] = self._parse_dc_wiring_losses(sections["array_losses"])
+
+        # Parse each section
+        for sec, sec_lines in sections.items():
+            if sec == "soiling_losses":
+                parsed["soiling_losses"] = self._parse_soiling_losses(sec_lines)
+            elif sec == "thermal_losses":
+                parsed["thermal_losses"] = self._parse_thermal_losses(sec_lines)
+            elif sec == "module_mismatch_losses":
+                parsed["module_mismatch_losses"] = self._parse_mismatch_losses(sec_lines)
+            elif sec == "iam_losses":
+                parsed["iam_losses"] = self._parse_iam_losses(sec_lines)
+            elif sec == "ac_wiring_losses":
+                parsed["ac_wiring_losses"] = self._parse_ac_wiring_losses(sec_lines)
+
+        return parsed
+
+    def _parse_soiling_losses(self, lines: List[str]) -> Dict[str, Any]:
+        data = {}
+        for line in lines:
+            if "Average loss Fraction" in line:
+                m = re.search(r"Average loss Fraction\s+([\d.]+)%", line)
+                if m:
+                    data["average_loss_fraction_percent"] = float(m.group(1))
+            elif re.search(r"\d+\.\d+%", line):
+                # Monthly percentages
+                parts = line.split()
+                months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+                data["monthly_percentages"] = {months[i]: float(parts[i].rstrip('%')) for i in range(len(parts))}
+        return data
+
+    def _parse_thermal_losses(self, lines: List[str]) -> Dict[str, Any]:
+        data = {}
+        for line in lines:
+            if "Loss Fraction" in line and "Module temperature" not in line:
+                m = re.search(r"Loss Fraction\s+(-?[\d.]+)%", line)
+                if m:
+                    data["loss_fraction_percent"] = float(m.group(1))
+            elif "Uc (const)" in line:
+                m = re.search(r"Uc \(const\)\s+([\d.]+)", line)
+                if m:
+                    data["uc_const_w_per_m2_k"] = float(m.group(1))
+            elif "Uv (wind)" in line:
+                m = re.search(r"Uv \(wind\)\s+([\d.]+)", line)
+                if m:
+                    data["uv_wind_w_per_m2_k_per_ms"] = float(m.group(1))
+        return data
+
+    def _parse_mismatch_losses(self, lines: List[str]) -> Dict[str, Any]:
+        data = {}
+        for line in lines:
+            if "Loss Fraction" in line:
+                m = re.search(r"Loss Fraction\s+([\d.]+)%", line)
+                if m:
+                    data["loss_fraction_percent"] = float(m.group(1))
+        return data
+
+    def _parse_iam_losses(self, lines: List[str]) -> Dict[str, Any]:
+        data = {}
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+            if "DC wiring losses" in line or "Array #" in line:
+                break
+            if "Incidence effect (IAM):" in line:
+                m = re.search(r"Incidence effect \(IAM\):\s+(.+)", line)
+                if m:
+                    data["incidence_effect"] = m.group(1).strip()
+            elif re.search(r"\d+\.\d+", line) and not any(c in line for c in ['°', 'mΩ', '%']):
+                parts = line.split()
+                if all(p.replace('.', '').replace('-', '').isdigit() for p in parts):
+                    factors = [float(p) for p in parts]
+                    angles = [0, 20, 30, 40, 50, 60, 70, 80, 90]
+                    data["iam_profile"] = dict(zip(angles, factors))
+        return data
+
+    def _parse_dc_wiring_losses(self, lines: List[str]) -> Dict[str, Any]:
+        data = {"arrays": []}
+        # Combine all lines into one string, as the section might be on one line
+        full_text = " ".join(lines)
+        # Parse global wiring
+        if "Global wiring resistance" in full_text:
+            m = re.search(r"Global wiring resistance\s+([\d.]+)mΩ\s+Loss Fraction\s+([\d.]+)%", full_text)
+            if m:
+                data["global_wiring_resistance_mohm"] = float(m.group(1))
+                data["global_loss_fraction_percent"] = float(m.group(2))
+        # Parse arrays: find all notations, then all res, then all losses, and zip them
+        notations = []
+        for match in re.finditer(r"Array #(\d+)\s*-\s*(.+?)(?=Array #|\s*Global|$)", full_text):
+            array_id = int(match.group(1))
+            notation = match.group(2).strip()
+            notations.append((array_id, notation))
+        res_list = re.findall(r"Global array res\.\s*([\d.]+)mΩ", full_text)
+        loss_list = re.findall(r"Loss Fraction\s+([\d.]+)%", full_text)
+        if len(notations) > 0 and len(res_list) >= len(notations) and len(loss_list) >= len(notations):
+            for (array_id, notation), res, loss in zip(notations, res_list[:len(notations)], loss_list[:len(notations)]):
+                data["arrays"].append({
+                    "array_id": array_id,
+                    "notation": notation,
+                    "global_array_resistance_mohm": float(res),
+                    "loss_fraction_percent": float(loss)
+                })
+        return data
+
+    def _parse_ac_wiring_losses(self, lines: List[str]) -> Dict[str, Any]:
+        data = {}
+        for line in lines:
+            if "Loss Fraction" in line:
+                m = re.search(r"Loss Fraction\s+([\d.]+)%", line)
+                if m:
+                    data["loss_fraction_percent"] = float(m.group(1))
+            elif "Inverter voltage" in line:
+                m = re.search(r"Inverter voltage\s+([\d.]+)Vac", line)
+                if m:
+                    data["inverter_voltage_vac"] = float(m.group(1))
+            elif "Wire section" in line:
+                m = re.search(r"Wire section\s+(.+)", line)
+                if m:
+                    data["wire_section"] = m.group(1).strip()
+            elif "Wires length" in line:
+                m = re.search(r"Wires length\s+([\d.]+)m", line)
+                if m:
+                    data["wires_length_m"] = float(m.group(1))
+        return data
+
+    def _write_array_losses_text(self, f, losses: Dict[str, Any]):
+        """Write structured array losses to text report."""
+        for key, value in losses.items():
+            f.write(f"{key.replace('_', ' ').title()}:\n")
+            if isinstance(value, dict):
+                for sub_key, sub_value in value.items():
+                    f.write(f"  {sub_key.replace('_', ' ').title()}: {sub_value}\n")
+            elif isinstance(value, list):
+                for item in value:
+                    if isinstance(item, dict):
+                        for sub_key, sub_value in item.items():
+                            f.write(f"  {sub_key.replace('_', ' ').title()}: {sub_value}\n")
+                        f.write("\n")
+                    else:
+                        f.write(f"  {item}\n")
+            else:
+                f.write(f"  {value}\n")
+            f.write("\n")
 
     def parse_arrays_from_text(self, blocks: Dict[int, Dict]) -> Dict[str, Dict]:
         """
@@ -506,9 +700,11 @@ class PVsystParser:
         pages_with_arrays = []
         for page_num, page_data in blocks.items():
             full = page_data.get("full_text", "") or ""
-            if re.search(r"PV Array Characteristics", full, re.IGNORECASE) or re.search(
-                r"Array\s*#\s*\d+", full, re.IGNORECASE
-            ):
+            if (re.search(r"PV Array Characteristics", full, re.IGNORECASE) or
+                re.search(r"Array\s*#?\s*\d+", full, re.IGNORECASE) or
+                re.search(r"Array Characteristics", full, re.IGNORECASE) or
+                re.search(r"PV Modules", full, re.IGNORECASE) or
+                re.search(r"Module Configuration", full, re.IGNORECASE)):
                 pages_with_arrays.append(page_num)
 
         if not pages_with_arrays:
@@ -526,7 +722,7 @@ class PVsystParser:
 
         # 3) split into array blocks
         array_pattern = re.compile(
-            r"(Array\s*#\s*(\d+).*?)(?=Array\s*#\s*\d+|AC wiring losses|Page \d+/\d+|$)",
+            r"(Array\s*#?\s*(\d+).*?)(?=Array\s*#?\s*\d+|AC wiring losses|Page \d+/\d+|$)",
             re.DOTALL | re.IGNORECASE,
         )
 
@@ -561,6 +757,10 @@ class PVsystParser:
             self.expanded_arrays.extend(arr["expanded_combinations"])
 
         print(f"    Total arrays parsed: {len(arrays)}")
+        # Fallback: if no arrays from text, try from tables
+        if not self.arrays:
+            self.parse_arrays_from_tables()
+            print(f"    Arrays from tables: {len(self.arrays)}")
         # Check for arrays that did not get expanded combinations and assign sequential MPPTs
         unexpanded_arrays = [arr_id for arr_id, arr_data in arrays.items() if not arr_data.get("expanded_combinations")]
         if unexpanded_arrays:
@@ -659,6 +859,54 @@ class PVsystParser:
                         arr["azimuth_compass_deg"] = ori_data["azimuth_compass_deg"]
         return arrays
 
+    def parse_arrays_from_tables(self):
+        """Fallback: parse arrays from extracted tables if text parsing failed."""
+        for page_num, tables in self.tables.items():
+            for table in tables:
+                header = [h.lower() for h in table["header"]]
+                rows = table["rows"]
+                # Check if it looks like an array table
+                if ("array" in " ".join(header) or "modules" in " ".join(header)) and len(rows) > 0:
+                    for row in rows:
+                        if len(row) >= 3:
+                            # Assume first column is array id, like "Array 1" or "1"
+                            array_col = row[0].strip()
+                            m = re.search(r"(\d+)", array_col)
+                            if m:
+                                arr_id = int(m.group(1))
+                                array_data = {"array_id": arr_id, "original_block_text": " ".join(row), "original_notation": f"Array #{arr_id}"}
+                                # Try to find modules, nominal, etc.
+                                for i, h in enumerate(header):
+                                    if "modules" in h and i < len(row):
+                                        try:
+                                            array_data["number_of_modules"] = int(row[i])
+                                        except:
+                                            pass
+                                    elif "nominal" in h and "kwp" in h and i < len(row):
+                                        try:
+                                            array_data["nominal_stc_kwp"] = float(row[i].replace(",", ""))
+                                        except:
+                                            pass
+                                    elif "strings" in h and i < len(row):
+                                        try:
+                                            array_data["strings"] = int(row[i])
+                                        except:
+                                            pass
+                                    elif "series" in h and i < len(row):
+                                        try:
+                                            array_data["modules_in_series"] = int(row[i])
+                                        except:
+                                            pass
+                                # Compute nominal from module if possible
+                                if "number_of_modules" in array_data and self.module_info.get("unit_nom_power_w"):
+                                    mod_power = self.module_info["unit_nom_power_w"]
+                                    num_mod = array_data["number_of_modules"]
+                                    array_data["nominal_stc_kwp_from_module"] = round(mod_power * num_mod / 1000.0, 3)
+                                # Add inverter if possible, but hard
+                                # For now, assume single inverter or something
+                                if str(arr_id) not in self.arrays:
+                                    self.arrays[str(arr_id)] = array_data
+
     def _parse_array_block(self, section_text: str, array_id: str) -> Dict:
         """
         Parse a single Array # block using only PVsyst-controlled phrases.
@@ -719,7 +967,7 @@ class PVsystParser:
 
         # Orientation #n inside the block
         m_ori = re.search(
-            r"Orientation\s*#\s*(\d+)",
+            r"Orientation\s*#?\s*(\d+)",
             section_text,
             re.IGNORECASE,
         )
@@ -793,12 +1041,96 @@ class PVsystParser:
 
         
         if m_mppt:
-            array_data["mppt_count"] = int(m_mppt.group(1))         # e.g. 1, 2, 3
+            total_mppts = int(m_mppt.group(1))
+            num_invs = len(inverter_ids) if inverter_ids else 1
+            array_data["mppt_count"] = total_mppts // num_invs
             array_data["mppt_share_percent"] = float(m_mppt.group(2))  # e.g. 35.0
             array_data["inverter_unit_fraction"] = float(m_mppt.group(3))  # e.g. 0.3
 
+        # Inverter info in array block (when differs from global)
+        if "PV module Inverter" in section_text:
+            # Extract the block like in extract_equipment_info
+            m = re.search(r"PV\s+module\s+Inverter(.{0,1000})", section_text, re.IGNORECASE | re.DOTALL)
+            if m:
+                block = "PV module Inverter" + m.group(1)
+                lines = [ln.strip() for ln in block.splitlines() if ln.strip()]
+
+                # Manufacturer line
+                manu_line = next((ln for ln in lines if "Manufacturer" in ln), None)
+                if manu_line:
+                    mm = re.search(r"Manufacturer\s+(.+?)\s+Manufacturer\s+(.+)", manu_line, re.IGNORECASE)
+                    if mm:
+                        array_data["inverter_manufacturer"] = mm.group(2).strip()
+
+                # Model line
+                model_line = next((ln for ln in lines if re.search(r"\bModel\b", ln)), None)
+                if model_line:
+                    mm = re.search(r"Model\s+(.+?)\s+Model\s+(.+)", model_line, re.IGNORECASE)
+                    if mm:
+                        array_data["inverter_model"] = mm.group(2).strip()
+
+                # Unit Nom. Power line
+                power_line = next((ln for ln in lines if "Unit Nom. Power" in ln), None)
+                if power_line:
+                    mm = re.search(
+                        r"Unit\s+Nom\.?\s*Power\s+([0-9.,]+\s*[kM]?[Ww][A-Za-z]*)\s+"
+                        r"Unit\s+Nom\.?\s*Power\s+([0-9.,]+\s*[kM]?[Ww][A-Za-z]*)",
+                        power_line,
+                        re.IGNORECASE,
+                    )
+                    if mm:
+                        inv_power_raw = mm.group(2).strip()
+                        array_data["inverter_unit_nom_power_raw"] = inv_power_raw
+                        inv_power = self.clean_nom_power(inv_power_raw)
+                        if inv_power is not None:
+                            array_data["inverter_unit_nom_power_kw"] = inv_power
 
         return array_data
+
+    def _collect_inverter_types(self) -> List[Dict[str, Any]]:
+        """Collect unique inverter types from arrays and global info."""
+        types = {}
+        type_counter = 1
+
+        # From arrays
+        for arr_id, arr_data in self.arrays.items():
+            man = arr_data.get("inverter_manufacturer")
+            mod = arr_data.get("inverter_model")
+            power = arr_data.get("inverter_unit_nom_power_kw")
+            if man or mod or power is not None:
+                key = (man or "", mod or "", power or 0)
+                if key not in types:
+                    type_id = f"inverter_{type_counter}"
+                    types[key] = {
+                        "id": type_id,
+                        "manufacturer": man,
+                        "model": mod,
+                        "unit_nom_power_kw": power
+                    }
+                    type_counter += 1
+                arr_data["inverter_type_id"] = types[key]["id"]
+
+        # Global fallback
+        global_man = self.inverter_info.get("manufacturer")
+        global_mod = self.inverter_info.get("model")
+        global_power = self.inverter_info.get("unit_nom_power_kw")
+        if global_man or global_mod or global_power is not None:
+            key = (global_man or "", global_mod or "", global_power or 0)
+            if key not in types:
+                type_id = f"inverter_{type_counter}"
+                types[key] = {
+                    "id": type_id,
+                    "manufacturer": global_man,
+                    "model": global_mod,
+                    "unit_nom_power_kw": global_power
+                }
+                type_counter += 1
+            # Assign to arrays without specific type
+            for arr_data in self.arrays.values():
+                if "inverter_type_id" not in arr_data:
+                    arr_data["inverter_type_id"] = types[key]["id"]
+
+        return list(types.values())
 
     def extract_monthly_production(self, blocks: Dict[int, Dict]) -> Dict[str, float]:
         """
@@ -1135,16 +1467,13 @@ class PVsystParser:
                 )
                 f.write(f"  Matches: {', '.join(section_data['matches'])}\n\n")
 
-            # Tables Summary
-            f.write("TABLES SUMMARY\n")
-            f.write("-" * 20 + "\n")
-            for page_num, tables in self.tables.items():
-                f.write(f"Page {page_num}\n")
-                for i, table in enumerate(tables):
-                    f.write(
-                        f"  Table {i + 1} ({table['method']}): {len(table['rows'])} rows, {len(table['header'])} columns\n"
-                    )
-                f.write("\n")
+
+
+            # Array Losses
+            if self.array_losses:
+                f.write("ARRAY LOSSES\n")
+                f.write("-" * 15 + "\n")
+                self._write_array_losses_text(f, self.array_losses)
 
     def generate_json_output(self, output_path: str):
         """Generate structured JSON output with separated configurations, associations, and monthly production."""
@@ -1153,11 +1482,11 @@ class PVsystParser:
         # Create array configurations (clean technical specs)
         array_configurations = {}
         for array_id, array_data in self.arrays.items():
-            # Clean configuration without expanded combinations
+            # Clean configuration without expanded combinations and inverter details
             config = {
                 k: v
                 for k, v in array_data.items()
-                if k not in ["expanded_combinations", "original_notation"]
+                if k not in ["expanded_combinations", "original_notation", "inverter_manufacturer", "inverter_model", "inverter_unit_nom_power_raw", "inverter_unit_nom_power_kw"]
             }
             array_configurations[array_id] = config
 
@@ -1244,12 +1573,25 @@ class PVsystParser:
             annual_total = sum(monthly_data.values())
             specific_production = annual_total / capacity if capacity > 0 else 0
 
-            inverter_summary[inverter] = {
+            # Find inverter type
+            type_id = None
+            for combo in self.expanded_arrays:
+                if combo["inverter"] == inverter:
+                    arr_id = combo["array_id"]
+                    arr_data = self.arrays.get(arr_id)
+                    if arr_data and "inverter_type_id" in arr_data:
+                        type_id = arr_data["inverter_type_id"]
+                        break
+
+            summary = {
                 "capacity_kwp": capacity,
                 "annual_production_kwh": annual_total,
                 "specific_production_kwh_per_kwp": round(specific_production, 0),
                 "monthly_production": monthly_data,
             }
+            if type_id:
+                summary["inverter_type_id"] = type_id
+            inverter_summary[inverter] = summary
 
         self.inverter_summary = inverter_summary
 
@@ -1292,13 +1634,14 @@ class PVsystParser:
                 "total_annual_production_kwh": total_annual_kwh,
             },
             "pv_module": self.module_info,
-            "inverter": self.inverter_info,
+            "inverters": self.inverter_types,
             "array_configurations": array_configurations,
             "associations": associations,
             "inverter_summary": inverter_summary,
             "system_monthly_production": self.system_monthly_production,
             "system_monthly_globhor": self.system_monthly_globhor,
             "orientations": self.orientations,
+            "array_losses": self.array_losses,
         }
 
         with open(output_path, "w", encoding="utf-8") as f:
@@ -1312,7 +1655,7 @@ class PVsystParser:
             config = {
                 k: v
                 for k, v in array_data.items()
-                if k not in ["expanded_combinations", "original_notation"]
+                if k not in ["expanded_combinations", "original_notation", "inverter_manufacturer", "inverter_model", "inverter_unit_nom_power_raw", "inverter_unit_nom_power_kw"]
             }
             array_configurations[array_id] = config
 
@@ -1444,13 +1787,14 @@ class PVsystParser:
                 "total_annual_production_kwh": total_annual_kwh,
             },
             "pv_module": self.module_info,
-            "inverter": self.inverter_info,
+            "inverters": self.inverter_types,
             "array_configurations": array_configurations,
             "associations": associations,
             "inverter_summary": inverter_summary,
             "system_monthly_production": self.system_monthly_production,
             "system_monthly_globhor": self.system_monthly_globhor,
             "orientations": self.orientations,
+            "array_losses": self.array_losses,
         }
 
 
@@ -1471,12 +1815,17 @@ class PVsystParser:
             print(f"Output directory: {output_dir_path}")
 
         # Extract data
-        self.tables = self.extract_tables(pdf_path)
         blocks = self.extract_text_blocks(pdf_path)
         self.sections = self.identify_sections(blocks)
+        self.section_contents = self.extract_section_contents(blocks, self.sections)
+        raw_array_losses = self.section_contents.get("Array Losses", [])
+        self.array_losses = self.parse_array_losses_section(raw_array_losses[0]) if raw_array_losses else {}
         self.extract_equipment_info(blocks)
         self.orientations = self.extract_orientations(blocks)
         self.arrays = self.parse_arrays_from_text(blocks)
+
+        # Collect unique inverter types
+        self.inverter_types = self._collect_inverter_types()
 
         #        # Flatten expanded combinations
         #        self.expanded_arrays = []
@@ -1488,14 +1837,11 @@ class PVsystParser:
 
         if generate_outputs and output_dir_path:
             # Generate outputs
-            text_path = str(output_dir_path / f"{pdf_name}.txt")
             json_path = str(output_dir_path / f"{pdf_name}.json")
 
-            self.generate_text_report(text_path)
             self.generate_json_output(json_path)
 
             print(f"\nParsing complete!")
-            print(f"  Text report: {text_path}")
             print(f"  JSON output: {json_path}")
         else:
             print(f"\nParsing complete!")
