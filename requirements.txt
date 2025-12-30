@@ -1,4 +1,3 @@
 camelot-py
 fastapi
 pdfplumber
-python-multipart
