@@ -432,12 +432,13 @@ class PVsystParser:
                 if single_match:
                     inv_num = int(single_match.group(1))
                     inverters.append(f"INV{inv_num:02d}")
-                       else:
+                else:
                     # Handle bare numbers like "7,8"
                     num_match = re.search(r"(\d+)", part)
                     if num_match:
                         inv_num = int(num_match.group(1))
                         inverters.append(f"INV{inv_num:02d}")
+                        pass
 
         return inverters
 
@@ -1382,7 +1383,7 @@ class PVsystParser:
                 valid = all(re.match(r"^[A-Za-z0-9\-_.]+$", inv) for inv in inv_list)
                 if valid:
                     user_inverter_ids = inv_list
-                       else:
+                else:
                     print("Invalid inverter names. Falling back to auto-parsed.")
             else:
                 print("No input. Falling back to auto-parsed.")
@@ -1772,10 +1773,10 @@ class PVsystParser:
                                 )
         f.write("\n")
 
-            # Individual Array Details
-            f.write("INDIVIDUAL ARRAY DETAILS\n")
-            f.write("-" * 30 + "\n")
-            for array_id, array_data in self.arrays.items():
+        # Individual Array Details
+        f.write("INDIVIDUAL ARRAY DETAILS\n")
+        f.write("-" * 30 + "\n")
+        for array_id, array_data in self.arrays.items():
                 f.write(f"Array #{array_id}\n")
                 f.write(f"  Original Notation: {array_data['original_notation']}\n")
                 f.write(
@@ -1795,24 +1796,24 @@ class PVsystParser:
                     if key not in ["expanded_combinations", "original_notation"]:
                         f.write(f"    {key.replace('_', ' ').title()}: {value}\n")
                 f.write("\n")
-
-            # Sections
-            f.write("IDENTIFIED SECTIONS\n")
-            f.write("-" * 25 + "\n")
-            for section_name, section_data in self.sections.items():
-                f.write(f"{section_name}\n")
-                f.write(
-                    f"  Found at {len(section_data['start_positions'])} location(s)\n"
-                )
-                matches_str = ', '.join(section_data['matches'])
-
-                f.write(f"  Matches: {matches_str}\n\n")
-
-            # Array Losses
-            if self.array_losses:
-                f.write("ARRAY LOSSES\n")
-                f.write("-" * 15 + "\n")
-                self._write_array_losses_text(f, self.array_losses)
+ 
+        # Sections
+        f.write("IDENTIFIED SECTIONS\n")
+        f.write("-" * 25 + "\n")
+        for section_name, section_data in self.sections.items():
+            f.write(f"{section_name}\n")
+            f.write(
+                f"  Found at {len(section_data['start_positions'])} location(s)\n"
+            )
+            matches_str = ', '.join(section_data['matches'])
+ 
+            f.write(f"  Matches: {matches_str}\n\n")
+ 
+        # Array Losses
+        if self.array_losses:
+            f.write("ARRAY LOSSES\n")
+            f.write("-" * 15 + "\n")
+            self._write_array_losses_text(f, self.array_losses)
 
     def generate_json_output(self, output_path: str):
         """Generate structured JSON output with separated configurations, associations, and monthly production."""
@@ -1878,7 +1879,7 @@ class PVsystParser:
                 if n_mppts > 0:
                     base = strings // n_mppts
                     remainder = strings % n_mppts
-                       else:
+                else:
                     base = 0
                     remainder = 0
 
@@ -1888,12 +1889,8 @@ class PVsystParser:
                     modules_here = strings_here * series
 
                     if stc_kwp:
-                        dc_here = (
-                            round(stc_kwp * (modules_here / (strings * series)), 3)
-                            if (strings * series)
-                            else None
-                        )
-                           else:
+                        dc_here = round(stc_kwp * (modules_here / (strings * series)), 3) if (strings * series) else None
+                    else:
                         dc_here = None
 
                     mppt_allocation[(inv, mppt, array_id)] = {
@@ -2140,12 +2137,8 @@ class PVsystParser:
                 modules_here = strings_here * series
 
                 if stc_kwp:
-                    dc_here = (
-                        round(stc_kwp * (modules_here / (strings * series)), 3)
-                        if (strings * series)
-                        else None
-                    )
-                       else:
+                    dc_here = round(stc_kwp * (modules_here / (strings * series)), 3) if (strings * series) else None
+                else:
                     dc_here = None
 
                 mppt_allocation[(inv, mppt, array_id)] = {
