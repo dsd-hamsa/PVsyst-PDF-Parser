@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-PVsyst PDF Parser V2 with Monthly Production
+PVsyst PDF Parser V1.0
 
 A comprehensive parser for PVsyst PDF reports that handles complex inverter/MPPT grouping
 notation and converts them to structured, readable formats with monthly production data.
