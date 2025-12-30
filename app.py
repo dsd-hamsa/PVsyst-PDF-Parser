@@ -1,17 +1,20 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+"""API for parsing PVsyst PDF files."""
+
 import tempfile
 from pathlib import Path
 
-from pvsyst_parser import PVsystParser  # your script
+from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+
+from pvsyst_parser import PVsystParser
 
 app = FastAPI(title="PVsyst Parser API")
 
 # Allow JS frontends (e.g., GitHub Pages) to talk to this API
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # tighten if you want
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -20,6 +23,7 @@ app.add_middleware(
 
 @app.post("/api/parse")
 async def parse_pvsyst_pdf(file: UploadFile = File(...)):
+    """Parse an uploaded PVsyst PDF file and return the parsed data."""
     if not file.filename or not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Please upload a PDF file.")
 
@@ -31,19 +35,19 @@ async def parse_pvsyst_pdf(file: UploadFile = File(...)):
             tmp.write(contents)
             tmp_path = tmp.name
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to save file: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to save file: {e}") from e
 
     # Run your parser
     parser = PVsystParser()
     try:
         data = parser.parse_pdf(tmp_path, generate_outputs=False)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Parsing failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Parsing failed: {e}") from e
     finally:
         # clean up uploaded file
         try:
             Path(tmp_path).unlink(missing_ok=True)
-        except Exception:
+        except OSError:
             pass
 
     return JSONResponse(content=data)
@@ -51,4 +55,5 @@ async def parse_pvsyst_pdf(file: UploadFile = File(...)):
 
 @app.get("/api/health")
 def health():
+    """Health check endpoint."""
     return {"status": "ok"}

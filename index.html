@@ -239,16 +239,16 @@
       statusEl.className = "status " + (kind || "");
     }
 
-    function renderResults(data) {
-      resultsEl.style.display = "block";
+     function renderResults(data) {
+       resultsEl.style.display = "block";
 
-      renderSummary(data);
-      renderModuleInfo(data.pv_module || {});
-      renderInverterInfo(data.inverter || {});
-      renderAssociations(data.associations || {});
-      renderArrays(data.array_configurations || {});
-      renderInverterMonthly(data.inverter_summary || {});
-    }
+       renderSummary(data);
+       renderModuleInfo(data.pv_module || {});
+       renderInverters(data.inverters || []);
+       renderAssociations(data.associations || {});
+       renderArrays(data.array_configurations || {});
+       renderInverterMonthly(data.inverter_summary || {});
+     }
 
     function renderSummary(d) {
         const el = document.getElementById("summaryCard");
@@ -258,6 +258,8 @@
             <div class="kvs">
             <div><span class="key">Arrays</span><span class="val">${m.total_arrays ?? "—"}</span></div>
             <div><span class="key">Inverters</span><span class="val">${m.total_inverters ?? "—"}</span></div>
+            <div><span class="key">Modules</span><span class="val">${m.total_modules ?? "—"}</span></div>
+            <div><span class="key">Strings</span><span class="val">${m.total_strings ?? "—"}</span></div>
             <div><span class="key">Capacity</span><span class="val">${fmtNum(m.total_system_capacity_kwp)} kWp</span></div>
             <div><span class="key">Annual prod.</span><span class="val">${fmtNum(m.total_annual_production_kwh)} kWh</span></div>
             </div>
@@ -276,16 +278,28 @@
         `;
     }
 
-    function renderInverterInfo(inv) {
+    function renderInverters(invs) {
         const el = document.getElementById("inverterCard");
-        el.innerHTML = `
-            <h2>Inverter</h2>
-            <div class="kvs">
-            <div><span class="key">Manufacturer</span><span class="val">${inv.manufacturer || "—"}</span></div>
-            <div><span class="key">Model</span><span class="val">${inv.model || "—"}</span></div>
-            <div><span class="key">Unit Nom. Power</span><span class="val">${inv.unit_nom_power_kw ? inv.unit_nom_power_kw + " kW" : (inv.unit_nom_power_raw || "—")}</span></div>
-            </div>
-        `;
+        console.log("Rendering inverters:", invs);
+        if (!invs || invs.length === 0) {
+            el.innerHTML = `
+                <h2>Inverters</h2>
+                <p class="muted">No inverter info found.</p>
+            `;
+            return;
+        }
+        el.innerHTML = `<h2>Inverters</h2>`;
+        invs.forEach(inv => {
+            const div = document.createElement("div");
+            div.className = "kvs";
+            div.innerHTML = `
+                <div><span class="key">ID</span><span class="val">${inv.id || "—"}</span></div>
+                <div><span class="key">Manufacturer</span><span class="val">${inv.manufacturer || "—"}</span></div>
+                <div><span class="key">Model</span><span class="val">${inv.model || "—"}</span></div>
+                <div><span class="key">Unit Nom. Power</span><span class="val">${inv.unit_nom_power_kw ? inv.unit_nom_power_kw + " kW" : "—"}</span></div>
+            `;
+            el.appendChild(div);
+        });
     }
 
     function renderArrays(arrays) {
@@ -300,8 +314,8 @@
         for (const [id, a] of Object.entries(arrays)) {
             const orientation = (window.lastParsed?.orientations || {})[a.orientation_id] || {};
 
-            const tilt = orientation.tilt ?? "—";
-            const az = orientation.azimuth_compass_deg ?? orientation.azimuth_deg ?? "—";
+            const tilt = a.tilt ?? orientation.tilt ?? "—";
+            const az = a.azimuth_compass_deg ?? a.azimuth_deg ?? orientation.azimuth_compass_deg ?? orientation.azimuth_deg ?? "—";
 
             const mods = a.number_of_modules ?? "—";
             const kwp = a.nominal_stc_kwp ?? a.nominal_stc_kwp_from_module ?? "—";
@@ -337,9 +351,10 @@
         el.innerHTML = "";
 
         for (const [invId, mppts] of Object.entries(assocs)) {
+            const displayName = window.lastParsed?.inverter_summary?.[invId]?.invName || invId;
             const details = document.createElement("details");
             details.open = false;
-            details.innerHTML = `<summary>${invId}</summary>`;
+            details.innerHTML = `<summary>${displayName}</summary>`;
 
             const table = document.createElement("table");
             const thead = document.createElement("thead");
@@ -351,6 +366,8 @@
                 <th>Modules</th>
                 <th>Mods/Str</th>
                 <th>DC kWp</th>
+                <th>Tilt</th>
+                <th>Azimuth</th>
             </tr>
             `;
             table.appendChild(thead);
@@ -358,7 +375,11 @@
             const tbody = document.createElement("tbody");
 
             for (const [mpptName, v] of Object.entries(mppts)) {
-            const modsPerStr = (window.lastParsed.array_configurations[v.array_id] || {}).modules_in_series ?? "—";
+            const a = window.lastParsed?.array_configurations?.[v.array_id] || {};
+            const orientation = (window.lastParsed?.orientations || {})[a.orientation_id] || {};
+            const tilt = a.tilt ?? orientation.tilt ?? "—";
+            const az = a.azimuth_compass_deg ?? a.azimuth_deg ?? orientation.azimuth_compass_deg ?? orientation.azimuth_deg ?? "—";
+            const modsPerStr = a.modules_in_series ?? "—";
             const tr = document.createElement("tr");
             tr.innerHTML = `
                 <td>${mpptName}</td>
@@ -367,6 +388,8 @@
                 <td>${v.modules ?? "—"}</td>
                 <td>${modsPerStr}</td>
                 <td>${fmtNum(v.dc_kwp)}</td>
+                <td>${tilt}°</td>
+                <td>${az}°</td>
             `;
             tbody.appendChild(tr);
             }
@@ -392,9 +415,10 @@
         ];
 
         for (const [invId, inv] of Object.entries(invSummary)) {
+            const displayName = inv.invName || invId;
             const details = document.createElement("details");
             details.innerHTML = `
-            <summary>${invId} &middot; ${fmtNum(inv.capacity_kwp)} kWp &middot; ${fmtNum(inv.annual_production_kwh)} kWh/yr</summary>
+            <summary>${displayName} &middot; ${fmtNum(inv.capacity_kwp)} kWp &middot; ${fmtNum(inv.annual_production_kwh)} kWh/yr</summary>
             `;
 
         const monthly = inv.monthly_production || {};
