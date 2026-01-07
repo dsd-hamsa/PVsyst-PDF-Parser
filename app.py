@@ -1,6 +1,6 @@
 """API for parsing PVsyst PDF files (V3).
 
-This version is compatible with `pvsyst_parser_v3.py` and returns the V3 JSON
+This version is compatible with `pvsyst_parser.py` and returns the V3 JSON
 structure without writing output files to disk.
 """
 

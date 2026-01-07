@@ -1499,6 +1499,10 @@ class PVsystParser:
                     "inverter_model",
                     "inverter_unit_nom_power_raw",
                     "inverter_unit_nom_power_kw",
+                    "module_manufacturer",
+                    "module_model",
+                    "module_unit_nom_power_raw",
+                    "module_unit_nom_power_w",
                 ]
             }
 
