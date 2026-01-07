@@ -81,7 +81,6 @@ class PVsystParser:
 
         self.array_losses: Dict[str, Any] = {}
         self.inverter_types: List[Dict[str, Any]] = []
-        self.module_types: List[Dict[str, Any]] = []
 
     # -------------------------------------------------------------------------
     # Text extraction
@@ -519,88 +518,6 @@ class PVsystParser:
 
         return out
 
-    def _parse_pvsyst_module_type_block(self, text: str) -> Dict[str, Any]:
-        """Parse a PVsyst equipment block; return PV module fields only.
-
-        Supports both:
-          - two-column rows ("PV module Inverter" with repeated labels)
-          - single-column rows ("PV module" subsection)
-
-        Returns keys:
-          - module_manufacturer
-          - module_model
-          - module_unit_nom_power_raw
-          - module_unit_nom_power_w
-        """
-        if not text:
-            return {}
-
-        lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
-        if not lines:
-            return {}
-
-        # Locate the PV module subsection.
-        mod_idx: Optional[int] = None
-        for i, ln in enumerate(lines):
-            if re.fullmatch(r"PV\s*module", ln, flags=re.IGNORECASE):
-                mod_idx = i
-                break
-        if mod_idx is None:
-            for i, ln in enumerate(lines):
-                if re.search(r"\bPV\s*module\b", ln, flags=re.IGNORECASE):
-                    mod_idx = i
-                    break
-        if mod_idx is None:
-            return {}
-
-        # Stop at the inverter subsection when present.
-        inv_idx: Optional[int] = None
-        for i in range(mod_idx + 1, len(lines)):
-            if re.fullmatch(r"Inverter", lines[i], flags=re.IGNORECASE):
-                inv_idx = i
-                break
-
-        mod_lines = lines[mod_idx : inv_idx] if inv_idx is not None else lines[mod_idx:]
-
-        out: Dict[str, Any] = {}
-
-        manu_line = next(
-            (ln for ln in mod_lines if re.search(r"\bManufacturer\b", ln, re.IGNORECASE)),
-            None,
-        )
-        if manu_line:
-            left, _right = self._two_column_values(manu_line, "Manufacturer")
-            if left:
-                out["module_manufacturer"] = left
-
-        model_line = next((ln for ln in mod_lines if re.search(r"\bModel\b", ln, re.IGNORECASE)), None)
-        if model_line:
-            left, _right = self._two_column_values(model_line, "Model")
-            if left:
-                out["module_model"] = left
-
-        power_line = next(
-            (ln for ln in mod_lines if re.search(r"Unit\s+Nom\.?\s*Power", ln, re.IGNORECASE)),
-            None,
-        )
-        if power_line:
-            left, _right = self._two_column_values(power_line, "Unit Nom. Power")
-            if left is None:
-                left, _right = self._two_column_values(power_line, "Unit Nom Power")
-            if left:
-                out["module_unit_nom_power_raw"] = left
-                numeric = clean_power_to_kw_or_w(left)
-                if numeric is not None:
-                    lower_left = left.lower()
-                    if "mw" in lower_left:
-                        out["module_unit_nom_power_w"] = int(round(numeric * 1_000_000))
-                    elif "kw" in lower_left:
-                        out["module_unit_nom_power_w"] = int(round(numeric * 1_000))
-                    else:
-                        out["module_unit_nom_power_w"] = int(round(numeric))
-
-        return out
-
     def _parse_array_block(self, section_text: str, array_id: str) -> Dict[str, Any]:
         array_data: Dict[str, Any] = {
             "array_id": array_id,
@@ -665,6 +582,10 @@ class PVsystParser:
         if m_mods:
             array_data["number_of_modules"] = int(m_mods.group(1))
 
+        unit_wp = self.module_info.get("unit_nom_power_w")
+        if isinstance(unit_wp, int) and "number_of_modules" in array_data:
+            nominal_kwp_from_module = unit_wp * array_data["number_of_modules"] / 1000.0
+            array_data["nominal_stc_kwp_from_module"] = round(nominal_kwp_from_module, 3)
 
         m_stc = re.search(r"Nominal\s*\(STC\)\s*([\d.]+)kWp", section_text, re.IGNORECASE)
         if m_stc:
@@ -698,20 +619,12 @@ class PVsystParser:
         if m_impp:
             array_data["i_mpp_a"] = float(m_impp.group(1))
 
-        # Equipment details embedded in this array block (seen in some PVsyst exports)
+        # Inverter details embedded in this array block (seen in some PVsyst exports)
         m_eq = re.search(r"\nPV\s*module\b.*", section_text, flags=re.IGNORECASE | re.DOTALL)
         if m_eq:
-            equipment_text = section_text[m_eq.start() :]
-            array_data.update(self._parse_pvsyst_module_type_block(equipment_text))
-            array_data.update(self._parse_pvsyst_inverter_type_block(equipment_text))
-
-        # Derive nominal DC size from module unit power when possible.
-        unit_wp = array_data.get("module_unit_nom_power_w")
-        if not isinstance(unit_wp, int):
-            unit_wp = self.module_info.get("unit_nom_power_w")
-        if isinstance(unit_wp, int) and "number_of_modules" in array_data:
-            nominal_kwp_from_module = unit_wp * array_data["number_of_modules"] / 1000.0
-            array_data["nominal_stc_kwp_from_module"] = round(nominal_kwp_from_module, 3)
+            array_data.update(
+                self._parse_pvsyst_inverter_type_block(section_text[m_eq.start() :])
+            )
 
         return array_data
 
@@ -766,7 +679,7 @@ class PVsystParser:
 
         mppt_num_re = re.compile(r"^MPPT\s*(\d+)$", re.IGNORECASE)
 
-        for _inv, combos in by_inverter.items():
+        for inv, combos in by_inverter.items():
             used: set[int] = set()
             missing: List[Dict[str, Any]] = []
 
@@ -846,38 +759,36 @@ class PVsystParser:
         total_strings: int,
         strings_per_mppt_max: int,
     ) -> Dict[Tuple[str, str], int]:
-        """Allocate strings for single-configuration sites.
+        """Allocate strings in inverter order, filling 1 per MPPT then round-robin.
 
-        Behavior:
-        - First ensure every (inverter, MPPT) endpoint gets 1 string (when possible)
-        - Then add second strings in a consistent round-robin order:
-          MPPT 1 across all inverters, then MPPT 2 across all inverters, etc.
-        - Repeat for up to `strings_per_mppt_max` strings per endpoint.
+        For each inverter: add 1 string to each MPPT (in order), repeat until either
+        strings are exhausted or the inverter's MPPTs reach strings_per_mppt_max.
+        Then move to the next inverter.
         """
         alloc: Dict[Tuple[str, str], int] = {(inv, mppt): 0 for inv in inverter_ids for mppt in mppt_ids}
         remaining = int(total_strings)
 
-        # Fill strings in passes: each pass adds at most 1 string per endpoint.
-        for _pass_idx in range(max(0, int(strings_per_mppt_max))):
-            for mppt in mppt_ids:
-                for inv in inverter_ids:
+        for inv in inverter_ids:
+            while remaining > 0:
+                progressed = False
+                for mppt in mppt_ids:
                     if remaining <= 0:
                         break
-                    alloc[(inv, mppt)] += 1
-                    remaining -= 1
-                if remaining <= 0:
-                    break
-            if remaining <= 0:
-                break
+                    key = (inv, mppt)
+                    if alloc[key] < strings_per_mppt_max:
+                        alloc[key] += 1
+                        remaining -= 1
+                        progressed = True
+                if not progressed:
+                    break  # this inverter saturated
 
         if remaining > 0:
             print(
                 f"  Warning: {remaining} strings could not be allocated within inferred MPPT limits; "
                 "distributing beyond per-MPPT max"
             )
-            # Best-effort: distribute remaining across all endpoints round-robin without cap,
-            # using the same MPPT-first ordering as the capped allocation.
-            all_endpoints = [(inv, mppt) for mppt in mppt_ids for inv in inverter_ids]
+            # Best-effort: distribute remaining across all endpoints round-robin without cap.
+            all_endpoints = [(inv, mppt) for inv in inverter_ids for mppt in mppt_ids]
             idx = 0
             while remaining > 0 and all_endpoints:
                 inv, mppt = all_endpoints[idx % len(all_endpoints)]
@@ -901,25 +812,11 @@ class PVsystParser:
         if not m_mods:
             return None
 
-        inverter_units_reported: Optional[int] = None
-        inverter_count_source: str = ""
-
-        m_inv = re.search(r"Number of inverters\s*(\d+)(?!\s*\*)", text, re.IGNORECASE)
-        if m_inv is not None:
-            inverter_units_reported = int(m_inv.group(1))
-            inverter_count_source = "number_of_inverters"
-
-        if inverter_units_reported is None:
-            m_inv = re.search(r"Nb\.\s*of\s*inverters\s*(\d+)(?!\s*\*)", text, re.IGNORECASE)
-            if m_inv is not None:
-                inverter_units_reported = int(m_inv.group(1))
-                inverter_count_source = "nb_of_inverters"
-
-        if inverter_units_reported is None:
-            m_inv = re.search(r"Nb\.\s*of\s*units\s*(\d+)(?!\s*\*)", text, re.IGNORECASE)
-            if m_inv is not None:
-                inverter_units_reported = int(m_inv.group(1))
-                inverter_count_source = "nb_of_units"
+        m_inv = re.search(r"Number of inverters\s*(\d+)\s*units?", text, re.IGNORECASE)
+        if not m_inv:
+            m_inv = re.search(r"Nb\.\s*of\s*units\s*(\d+)\s*units?", text, re.IGNORECASE)
+        if not m_inv:
+            return None
 
         # Accept both "string(s)" and "Strings", tolerate "17In series".
         m_cfg = re.search(
@@ -933,8 +830,7 @@ class PVsystParser:
         strings = int(m_cfg.group(1))
         series = int(m_cfg.group(2))
         number_of_modules = int(m_mods.group(1))
-        if inverter_units_reported is None:
-            inverter_count_source = "inferred_from_topology"
+        inverter_units_reported = int(m_inv.group(1))
 
         topology = self._infer_mppt_topology() or {
             "mppt_per_inverter": 1,
@@ -949,11 +845,11 @@ class PVsystParser:
         strings_per_inverter_max = max(1, mppt_per_inv * strings_per_mppt_max)
         inverter_units_required = (strings + strings_per_inverter_max - 1) // strings_per_inverter_max
 
-        inverter_units_used = (
-            inverter_units_reported if inverter_units_reported is not None else inverter_units_required
-        )
+        inverter_units_used = inverter_units_reported
+        if inverter_units_reported > inverter_units_required:
+            inverter_units_used = inverter_units_required
 
-        inverter_ids = [f"INV{i:02d}" for i in range(1, int(inverter_units_used) + 1)]
+        inverter_ids = [f"INV{i:02d}" for i in range(1, inverter_units_used + 1)]
         mppt_ids = [f"MPPT {i}" for i in range(1, mppt_per_inv + 1)]
 
         array_data: Dict[str, Any] = {
@@ -966,7 +862,6 @@ class PVsystParser:
             "inverter_ids": inverter_ids,
             "mppt_ids": mppt_ids,
             "inferred_single_config": True,
-            "inverter_count_source": inverter_count_source,
             "inferred_mppt_per_inverter": mppt_per_inv,
             "inferred_strings_per_mppt_max": strings_per_mppt_max,
             "inferred_topology_source": topology.get("source"),
@@ -985,15 +880,6 @@ class PVsystParser:
             array_data["azimuth_pvsyst_deg"] = az_pv
             array_data["azimuth_deg"] = az_compass
             array_data["azimuth_compass_deg"] = az_compass
-
-        # U mpp / I mpp (often shown in the single-config "At operating cond." block)
-        m_umpp = re.search(r"U\s*mpp\s*([-\d.]+)\s*V", text, re.IGNORECASE)
-        if m_umpp:
-            array_data["u_mpp_v"] = float(m_umpp.group(1))
-
-        m_impp = re.search(r"I\s*mpp\s*([-\d.]+)\s*A", text, re.IGNORECASE)
-        if m_impp:
-            array_data["i_mpp_a"] = float(m_impp.group(1))
 
         # If only one orientation exists, bind it
         if self.orientations and len(self.orientations) == 1:
@@ -1042,7 +928,6 @@ class PVsystParser:
         arrays: Dict[str, Dict[str, Any]] = {}
         seen_ids: set[str] = set()
         pending_inverter_type: Dict[str, Any] = {}
-        pending_module_type: Dict[str, Any] = {}
 
         for match in array_pattern.finditer(combined_text):
             block_text = match.group(1)
@@ -1066,14 +951,6 @@ class PVsystParser:
                 if not array_data.get("inverter_model") and not array_data.get("inverter_manufacturer"):
                     array_data.update(pending_inverter_type)
 
-            if pending_module_type:
-                if (
-                    not array_data.get("module_model")
-                    and not array_data.get("module_manufacturer")
-                    and array_data.get("module_unit_nom_power_w") is None
-                ):
-                    array_data.update(pending_module_type)
-
             if interactive:
                 header_line = array_data.get("original_block_text", "").splitlines()[0]
                 user_inv, user_mppt = self._interactive_array_config(
@@ -1091,13 +968,9 @@ class PVsystParser:
             seen_ids.add(array_id)
 
             if trailing_equipment:
-                parsed_module = self._parse_pvsyst_module_type_block(trailing_equipment)
-                if parsed_module:
-                    pending_module_type = parsed_module
-
-                parsed_inverter = self._parse_pvsyst_inverter_type_block(trailing_equipment)
-                if parsed_inverter:
-                    pending_inverter_type = parsed_inverter
+                parsed_type = self._parse_pvsyst_inverter_type_block(trailing_equipment)
+                if parsed_type:
+                    pending_inverter_type = parsed_type
 
         # Fallback: PVsyst reports with a single configuration and no Array # blocks
         if not arrays:
@@ -1133,15 +1006,6 @@ class PVsystParser:
                     if "azimuth_compass_deg" in ori_data:
                         arr["azimuth_deg"] = ori_data["azimuth_compass_deg"]
                         arr["azimuth_compass_deg"] = ori_data["azimuth_compass_deg"]
-
-        # Ensure per-array nominal DC size derived from that array's module type.
-        for arr in arrays.values():
-            unit_wp = arr.get("module_unit_nom_power_w")
-            if not isinstance(unit_wp, int):
-                unit_wp = self.module_info.get("unit_nom_power_w")
-            n_mods = arr.get("number_of_modules")
-            if isinstance(unit_wp, int) and isinstance(n_mods, int):
-                arr["nominal_stc_kwp_from_module"] = round(unit_wp * n_mods / 1000.0, 3)
 
         return arrays
 
@@ -1346,45 +1210,6 @@ class PVsystParser:
     # Inverter types / production
     # -------------------------------------------------------------------------
 
-    def _collect_module_types(self) -> List[Dict[str, Any]]:
-        types: Dict[Tuple[str, str, int], Dict[str, Any]] = {}
-        type_counter = 1
-
-        for arr_data in self.arrays.values():
-            man = arr_data.get("module_manufacturer")
-            mod = arr_data.get("module_model")
-            power = arr_data.get("module_unit_nom_power_w")
-            if man or mod or power is not None:
-                key = (man or "", mod or "", int(power or 0))
-                if key not in types:
-                    type_id = f"module_{type_counter}"
-                    types[key] = {
-                        "id": type_id,
-                        "manufacturer": man,
-                        "model": mod,
-                        "unit_nom_power_w": power,
-                    }
-                    type_counter += 1
-                arr_data["module_type_id"] = types[key]["id"]
-
-        global_man = self.module_info.get("manufacturer")
-        global_mod = self.module_info.get("model")
-        global_power = self.module_info.get("unit_nom_power_w")
-        if global_man or global_mod or global_power is not None:
-            key = (global_man or "", global_mod or "", int(global_power or 0))
-            if key not in types:
-                type_id = f"module_{type_counter}"
-                types[key] = {
-                    "id": type_id,
-                    "manufacturer": global_man,
-                    "model": global_mod,
-                    "unit_nom_power_w": global_power,
-                }
-            for arr_data in self.arrays.values():
-                arr_data.setdefault("module_type_id", types[key]["id"])
-
-        return list(types.values())
-
     def _collect_inverter_types(self) -> List[Dict[str, Any]]:
         types: Dict[Tuple[str, str, float], Dict[str, Any]] = {}
         type_counter = 1
@@ -1568,11 +1393,7 @@ class PVsystParser:
                     continue
 
                 array_data = self.arrays[array_id]
-                array_capacity = float(
-                    array_data.get("nominal_stc_kwp_from_module")
-                    or array_data.get("nominal_stc_kwp")
-                    or 0.0
-                )
+                array_capacity = float(array_data.get("nominal_stc_kwp") or 0.0)
                 array_modules = int(array_data.get("number_of_modules") or 0)
 
                 num_inverters_using_array = len(array_usage_count.get(array_id, set()))
@@ -1793,27 +1614,6 @@ class PVsystParser:
             if isinstance(t, dict) and t.get("id") is not None
         }
 
-        module_type_by_id: Dict[str, Dict[str, Any]] = {
-            str(t.get("id")): t
-            for t in self.module_types
-            if isinstance(t, dict) and t.get("id") is not None
-        }
-
-        def module_types_for_inverter(inv_id: str) -> List[Dict[str, Any]]:
-            module_type_ids: set[str] = set()
-            for assoc in raw_associations.get(inv_id, {}).values():
-                config_id = str(assoc.get("config_id"))
-                arr = self.arrays.get(config_id, {})
-                mid = arr.get("module_type_id")
-                if mid:
-                    module_type_ids.add(str(mid))
-
-            return [
-                module_type_by_id[mid]
-                for mid in sorted(module_type_ids)
-                if mid in module_type_by_id
-            ]
-
         def inverter_type_for(inv_id: str) -> Optional[Dict[str, Any]]:
             inverter_type_id: Optional[str] = None
             for combo in self.expanded_arrays:
@@ -1833,11 +1633,6 @@ class PVsystParser:
         for inv_id in sorted(raw_associations.keys()):
             description = self._inverter_display_name(inv_id)
             inv_type = inverter_type_for(inv_id)
-
-            modules_used = module_types_for_inverter(inv_id)
-            pv_module = modules_used[0] if len(modules_used) == 1 else None
-            if pv_module is None and not modules_used:
-                pv_module = self.module_info or None
 
             cap = float(self.inverter_capacities.get(inv_id, 0.0) or 0.0)
             monthly = self.monthly_production.get(inv_id, {})
@@ -1865,7 +1660,6 @@ class PVsystParser:
                     {
                         "mppt": mppt,
                         "config_id": config_id,
-                        "module_type_id": arr.get("module_type_id"),
                         "strings": strings_on_mppt,
                         "modules": assoc.get("modules"),
                         "dc_kwp": assoc.get("dc_kwp"),
@@ -1881,8 +1675,7 @@ class PVsystParser:
 
             inverter_summary[inv_id] = {
                 "description": description,
-                "pv_module": pv_module,
-                "pv_modules": modules_used,
+                "pv_module": self.module_info,
                 "inverter_type": inv_type,
                 "capacity_kwp": cap,
                 "annual_production_kwh": annual,
@@ -1903,13 +1696,11 @@ class PVsystParser:
                 "total_arrays": len(self.arrays),
                 "total_expanded_combinations": len(self.expanded_arrays),
                 "total_inverters": len(associations),
-                "total_module_types": len(self.module_types),
                 "total_system_capacity_kwp": total_capacity_kwp,
                 "total_annual_production_kwh": total_annual_kwh,
             },
             "pv_module": self.module_info,
             "inverter": self.inverter_info,
-            "module_types": self.module_types,
             "inverter_types": self.inverter_types,
             "array_configurations": array_configurations,
             "associations": associations,
@@ -1964,8 +1755,7 @@ class PVsystParser:
         # Arrays
         self.arrays = self.parse_arrays_from_text(blocks, interactive=interactive)
 
-        # Module + inverter types
-        self.module_types = self._collect_module_types()
+        # Inverter types
         self.inverter_types = self._collect_inverter_types()
 
         # Monthly production + inverter capacities

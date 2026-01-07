@@ -11,7 +11,7 @@ from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from pvsyst_parser import PVsystParser
+from pvsyst_parser_v3 import PVsystParser
 
 app = FastAPI(title="PVsyst Parser API (V3)")
 
@@ -62,7 +62,6 @@ async def parse_pvsyst_pdf(file: UploadFile = File(...)):
                 parser.array_losses = {}
 
         parser.arrays = parser.parse_arrays_from_text(blocks, interactive=False)
-        parser.module_types = parser._collect_module_types()
         parser.inverter_types = parser._collect_inverter_types()
         parser.calculate_monthly_production(blocks)
 
