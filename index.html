@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>PVsyst PDF Parser</title>
+  <title>PVsyst PDF Parser (V3)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     :root {
@@ -129,6 +129,7 @@
     th, td {
       padding: 0.25rem 0.4rem;
       border-bottom: 1px solid #111827;
+      vertical-align: top;
     }
     th {
       text-align: left;
@@ -146,9 +147,9 @@
 </head>
 <body>
   <main class="app">
-    <h1>📄 PVsyst PDF Parser</h1>
+    <h1>📄 PVsyst PDF Parser (V3)</h1>
     <p class="muted">
-      Upload a PVsyst report PDF to extract arrays, orientations, inverter summaries and monthly production.
+      Upload a PVsyst report PDF to extract inverter + MPPT configuration for monitoring.
     </p>
 
     <div class="upload-row">
@@ -166,7 +167,7 @@
       </div>
 
       <section class="card" style="margin-top:1rem;">
-        <h2>MPPT stringing</h2>
+        <h2>MPPT configuration (combined)</h2>
         <div id="mppt"></div>
       </section>
 
@@ -174,7 +175,6 @@
         <h2>Array configurations</h2>
         <div id="arrays"></div>
       </section>
-
 
       <section class="card" style="margin-top:1rem;">
         <h2>Inverter monthly production</h2>
@@ -187,7 +187,7 @@
     // Change this if you deploy the API elsewhere
     const API_BASE = location.origin.includes("github.io")
       ? "https://YOUR-BACKEND-HOST/api"  // <-- set this for GitHub Pages
-      : "http://localhost:8000/api";
+      : "http://localhost:8888/api";
 
     document.getElementById("apiUrlLabel").textContent = API_BASE + "/parse";
 
@@ -211,18 +211,13 @@
       formData.append("file", file);
 
       try {
-        const res = await fetch(API_BASE + "/parse", {
-          method: "POST",
-          body: formData,
-        });
-
+        const res = await fetch(API_BASE + "/parse", { method: "POST", body: formData });
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
           throw new Error(err.detail || "Parsing failed");
         }
 
         const data = await res.json();
-        console.log("API result:", data);
         window.lastParsed = data;
         renderResults(data);
         setStatus("Parsed successfully.", "ok");
@@ -239,187 +234,274 @@
       statusEl.className = "status " + (kind || "");
     }
 
-     function renderResults(data) {
-       resultsEl.style.display = "block";
+    function renderResults(data) {
+      resultsEl.style.display = "block";
 
-       renderSummary(data);
-       renderModuleInfo(data.pv_module || {});
-       renderInverters(data.inverters || []);
-       renderAssociations(data.associations || {});
-       renderArrays(data.array_configurations || {});
-       renderInverterMonthly(data.inverter_summary || {});
-     }
+      renderSummary(data);
+      renderModuleInfo(data.pv_module || {});
+      renderInverterInfo(data);
+      renderMpptCombined(data.inverter_summary || {});
+      renderArrays(data.array_configurations || {});
+      renderInverterMonthly(data.inverter_summary || {});
+    }
 
     function renderSummary(d) {
-        const el = document.getElementById("summaryCard");
-        const m = d.metadata || {};
-        el.innerHTML = `
-            <h2>System summary</h2>
-            <div class="kvs">
-            <div><span class="key">Arrays</span><span class="val">${m.total_arrays ?? "—"}</span></div>
-            <div><span class="key">Inverters</span><span class="val">${m.total_inverters ?? "—"}</span></div>
-            <div><span class="key">Modules</span><span class="val">${m.total_modules ?? "—"}</span></div>
-            <div><span class="key">Strings</span><span class="val">${m.total_strings ?? "—"}</span></div>
-            <div><span class="key">Capacity</span><span class="val">${fmtNum(m.total_system_capacity_kwp)} kWp</span></div>
-            <div><span class="key">Annual prod.</span><span class="val">${fmtNum(m.total_annual_production_kwh)} kWh</span></div>
-            </div>
-        `;
+      const el = document.getElementById("summaryCard");
+      const m = d.metadata || {};
+      const arrays = d.array_configurations || {};
+
+      // Derive totals client-side (V3 metadata intentionally minimal)
+      let totalModules = 0;
+      let totalStrings = 0;
+      for (const a of Object.values(arrays)) {
+        if (a && a.number_of_modules != null) totalModules += Number(a.number_of_modules) || 0;
+        if (a && a.strings != null) totalStrings += Number(a.strings) || 0;
+      }
+
+      el.innerHTML = `
+        <h2>System summary</h2>
+        <div class="kvs">
+          <div><span class="key">Arrays</span><span class="val">${m.total_arrays ?? Object.keys(arrays).length ?? "—"}</span></div>
+          <div><span class="key">Inverters</span><span class="val">${m.total_inverters ?? Object.keys(d.inverter_summary || {}).length ?? "—"}</span></div>
+          <div><span class="key">Modules</span><span class="val">${totalModules ? totalModules.toLocaleString() : "—"}</span></div>
+          <div><span class="key">Strings</span><span class="val">${totalStrings ? totalStrings.toLocaleString() : "—"}</span></div>
+          <div><span class="key">Capacity</span><span class="val">${fmtNum(m.total_system_capacity_kwp)} kWp</span></div>
+          <div><span class="key">Annual prod.</span><span class="val">${fmtNum(m.total_annual_production_kwh)} kWh</span></div>
+        </div>
+      `;
     }
 
     function renderModuleInfo(m) {
-        const el = document.getElementById("moduleCard");
-        el.innerHTML = `
-            <h2>PV module</h2>
-            <div class="kvs">
-            <div><span class="key">Manufacturer</span><span class="val">${m.manufacturer || "—"}</span></div>
-            <div><span class="key">Model</span><span class="val">${m.model || "—"}</span></div>
-            <div><span class="key">Unit Nom. Power</span><span class="val">${m.unit_nom_power_w ? m.unit_nom_power_w + " W" : "—"}</span></div>
-            </div>
-        `;
+      const el = document.getElementById("moduleCard");
+      el.innerHTML = `
+        <h2>PV module</h2>
+        <div class="kvs">
+          <div><span class="key">Manufacturer</span><span class="val">${m.manufacturer || "—"}</span></div>
+          <div><span class="key">Model</span><span class="val">${m.model || "—"}</span></div>
+          <div><span class="key">Unit Nom. Power</span><span class="val">${m.unit_nom_power_w ? m.unit_nom_power_w + " W" : "—"}</span></div>
+        </div>
+      `;
     }
 
-    function renderInverters(invs) {
-        const el = document.getElementById("inverterCard");
-        console.log("Rendering inverters:", invs);
-        if (!invs || invs.length === 0) {
-            el.innerHTML = `
-                <h2>Inverters</h2>
-                <p class="muted">No inverter info found.</p>
-            `;
-            return;
+    function renderInverterInfo(data) {
+      const el = document.getElementById("inverterCard");
+      const globalInv = data.inverter || {};
+      const types = Array.isArray(data.inverter_types) ? data.inverter_types : [];
+      const invSummary = data.inverter_summary || {};
+
+      const countsByTypeId = {};
+      for (const inv of Object.values(invSummary)) {
+        const t = inv && inv.inverter_type;
+        if (t && t.id) {
+          countsByTypeId[t.id] = (countsByTypeId[t.id] || 0) + 1;
         }
-        el.innerHTML = `<h2>Inverters</h2>`;
-        invs.forEach(inv => {
-            const div = document.createElement("div");
-            div.className = "kvs";
-            div.innerHTML = `
-                <div><span class="key">ID</span><span class="val">${inv.id || "—"}</span></div>
-                <div><span class="key">Manufacturer</span><span class="val">${inv.manufacturer || "—"}</span></div>
-                <div><span class="key">Model</span><span class="val">${inv.model || "—"}</span></div>
-                <div><span class="key">Unit Nom. Power</span><span class="val">${inv.unit_nom_power_kw ? inv.unit_nom_power_kw + " kW" : "—"}</span></div>
-            `;
-            el.appendChild(div);
-        });
+      }
+
+      let html = `<h2>Inverters</h2>`;
+
+      const hasGlobal = globalInv && (globalInv.manufacturer || globalInv.model || globalInv.unit_nom_power_kw != null);
+      if (hasGlobal) {
+        html += `
+          <p class="muted">Default inverter (from PVsyst equipment table)</p>
+          <div class="kvs">
+            <div><span class="key">Manufacturer</span><span class="val">${globalInv.manufacturer || "—"}</span></div>
+            <div><span class="key">Model</span><span class="val">${globalInv.model || "—"}</span></div>
+            <div><span class="key">Unit Nom. Power</span><span class="val">${globalInv.unit_nom_power_kw != null ? globalInv.unit_nom_power_kw + " kW" : "—"}</span></div>
+          </div>
+        `;
+      }
+
+      if (types.length) {
+        html += `<p class="muted" style="margin-top:0.75rem;">Inverter models detected</p>`;
+        html += `
+          <table>
+            <thead>
+              <tr>
+                <th>Type ID</th>
+                <th>Count</th>
+                <th>Manufacturer</th>
+                <th>Model</th>
+                <th>kW</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${types.map(t => {
+                const count = countsByTypeId[t.id] || "—";
+                const kw = (t.unit_nom_power_kw != null) ? t.unit_nom_power_kw : "—";
+                return `
+                  <tr>
+                    <td>${t.id || "—"}</td>
+                    <td>${count}</td>
+                    <td>${t.manufacturer || "—"}</td>
+                    <td>${t.model || "—"}</td>
+                    <td>${kw}</td>
+                  </tr>
+                `;
+              }).join("")}
+            </tbody>
+          </table>
+        `;
+      } else {
+        // Fallback: show distinct inverter types derived from inverter_summary (if present)
+        const inferred = new Map();
+        for (const inv of Object.values(invSummary)) {
+          const t = inv && inv.inverter_type;
+          if (!t) continue;
+          const key = JSON.stringify({ manufacturer: t.manufacturer || null, model: t.model || null, kw: t.unit_nom_power_kw || null });
+          inferred.set(key, t);
+        }
+        if (inferred.size) {
+          html += `<p class="muted" style="margin-top:0.75rem;">Inverter models detected</p>`;
+          html += `
+            <table>
+              <thead>
+                <tr>
+                  <th>Manufacturer</th>
+                  <th>Model</th>
+                  <th>kW</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${Array.from(inferred.values()).map(t => {
+                  const kw = (t.unit_nom_power_kw != null) ? t.unit_nom_power_kw : "—";
+                  return `
+                    <tr>
+                      <td>${t.manufacturer || "—"}</td>
+                      <td>${t.model || "—"}</td>
+                      <td>${kw}</td>
+                    </tr>
+                  `;
+                }).join("")}
+              </tbody>
+            </table>
+          `;
+        }
+      }
+
+      el.innerHTML = html;
+    }
+
+    function renderMpptCombined(invSummary) {
+      const el = document.getElementById("mppt");
+      if (!invSummary || Object.keys(invSummary).length === 0) {
+        el.innerHTML = "<p class='muted'>No MPPT configuration found.</p>";
+        return;
+      }
+
+      el.innerHTML = "";
+
+      for (const [invId, inv] of Object.entries(invSummary)) {
+        const details = document.createElement("details");
+        details.open = false;
+        const title = inv.description || invId;
+        details.innerHTML = `<summary>${title}</summary>`;
+
+        const combined = inv.combined_configuration || [];
+        if (!combined.length) {
+          const p = document.createElement("p");
+          p.className = "muted";
+          p.textContent = "No combined configuration.";
+          details.appendChild(p);
+          el.appendChild(details);
+          continue;
+        }
+
+        const table = document.createElement("table");
+        const thead = document.createElement("thead");
+        thead.innerHTML = `
+          <tr>
+            <th>MPPT</th>
+            <th>Config</th>
+            <th>Strings</th>
+            <th>Modules</th>
+            <th>Mods/Str</th>
+            <th>DC kWp</th>
+            <th>Tilt</th>
+            <th>Azimuth</th>
+            <th>U mpp (V)</th>
+            <th>I mpp (A)</th>
+          </tr>
+        `;
+        table.appendChild(thead);
+
+        const tbody = document.createElement("tbody");
+        for (const row of combined) {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td>${row.mppt ?? "—"}</td>
+            <td>${row.config_id ?? "—"}</td>
+            <td>${row.strings ?? "—"}</td>
+            <td>${row.modules ?? "—"}</td>
+            <td>${row.modules_in_series ?? "—"}</td>
+            <td>${fmtNum(row.dc_kwp)}</td>
+            <td>${row.tilt != null ? row.tilt + "°" : "—"}</td>
+            <td>${row.azimuth != null ? row.azimuth + "°" : "—"}</td>
+            <td>${row.u_mpp_v ?? "—"}</td>
+            <td>${row.i_mpp_a ?? "—"}</td>
+          `;
+          tbody.appendChild(tr);
+        }
+        table.appendChild(tbody);
+        details.appendChild(table);
+        el.appendChild(details);
+      }
     }
 
     function renderArrays(arrays) {
-        const el = document.getElementById("arrays");
-        if (!arrays || Object.keys(arrays).length === 0) {
-            el.innerHTML = "<p class='muted'>No array configuration found.</p>";
-            return;
-        }
+      const el = document.getElementById("arrays");
+      if (!arrays || Object.keys(arrays).length === 0) {
+        el.innerHTML = "<p class='muted'>No array configuration found.</p>";
+        return;
+      }
 
-        el.innerHTML = "";
+      el.innerHTML = "";
 
-        for (const [id, a] of Object.entries(arrays)) {
-            const orientation = (window.lastParsed?.orientations || {})[a.orientation_id] || {};
+      for (const [id, a] of Object.entries(arrays)) {
+        const tilt = a.tilt ?? "—";
+        const az = a.azimuth_compass_deg ?? a.azimuth_deg ?? "—";
 
-            const tilt = a.tilt ?? orientation.tilt ?? "—";
-            const az = a.azimuth_compass_deg ?? a.azimuth_deg ?? orientation.azimuth_compass_deg ?? orientation.azimuth_deg ?? "—";
+        const mods = a.number_of_modules ?? "—";
+        const kwp = a.nominal_stc_kwp ?? a.nominal_stc_kwp_from_module ?? "—";
+        const strings = a.strings ?? "—";
+        const series = a.modules_in_series ?? "—";
+        const orientationId = a.orientation_id ?? "—";
 
-            const mods = a.number_of_modules ?? "—";
-            const kwp = a.nominal_stc_kwp ?? a.nominal_stc_kwp_from_module ?? "—";
-            const strings = a.strings ?? "—";
-            const series = a.modules_in_series ?? "—";
-            const orientationId = a.orientation_id ?? "—";
-
-            const details = document.createElement("details");
-
-            details.innerHTML = `
-            <summary>Array #${id} - ${mods} modules - ${fmtNum(kwp)} kWp</summary>
-            <div class="kvs">
-                <div><span class="key">Orientation #</span><span class="val">${orientationId}</span></div>
-                <div><span class="key">Tilt</span><span class="val">${tilt}°</span></div>
-                <div><span class="key">Azimuth (compass)</span><span class="val">${az}°</span></div>
-                <div><span class="key">Strings</span><span class="val">${strings}</span></div>
-                <div><span class="key">Modules / string</span><span class="val">${series}</span></div>
-            </div>
-            `;
-
-            el.appendChild(details);
-        }
-        }
-    
-
-    function renderAssociations(assocs) {
-        const el = document.getElementById("mppt");
-        if (!assocs || Object.keys(assocs).length === 0) {
-            el.innerHTML = "<p class='muted'>No MPPT stringing info found.</p>";
-            return;
-        }
-
-        el.innerHTML = "";
-
-        for (const [invId, mppts] of Object.entries(assocs)) {
-            const displayName = window.lastParsed?.inverter_summary?.[invId]?.invName || invId;
-            const details = document.createElement("details");
-            details.open = false;
-            details.innerHTML = `<summary>${displayName}</summary>`;
-
-            const table = document.createElement("table");
-            const thead = document.createElement("thead");
-            thead.innerHTML = `
-            <tr>
-                <th>MPPT</th>
-                <th>Array</th>
-                <th>Strings</th>
-                <th>Modules</th>
-                <th>Mods/Str</th>
-                <th>DC kWp</th>
-                <th>Tilt</th>
-                <th>Azimuth</th>
-            </tr>
-            `;
-            table.appendChild(thead);
-
-            const tbody = document.createElement("tbody");
-
-            for (const [mpptName, v] of Object.entries(mppts)) {
-            const a = window.lastParsed?.array_configurations?.[v.array_id] || {};
-            const orientation = (window.lastParsed?.orientations || {})[a.orientation_id] || {};
-            const tilt = a.tilt ?? orientation.tilt ?? "—";
-            const az = a.azimuth_compass_deg ?? a.azimuth_deg ?? orientation.azimuth_compass_deg ?? orientation.azimuth_deg ?? "—";
-            const modsPerStr = a.modules_in_series ?? "—";
-            const tr = document.createElement("tr");
-            tr.innerHTML = `
-                <td>${mpptName}</td>
-                <td>${v.array_id ?? "—"}</td>
-                <td>${v.strings ?? "—"}</td>
-                <td>${v.modules ?? "—"}</td>
-                <td>${modsPerStr}</td>
-                <td>${fmtNum(v.dc_kwp)}</td>
-                <td>${tilt}°</td>
-                <td>${az}°</td>
-            `;
-            tbody.appendChild(tr);
-            }
-
-            table.appendChild(tbody);
-            details.appendChild(table);
-            el.appendChild(details);
-        }
-        }
-
+        const details = document.createElement("details");
+        details.innerHTML = `
+          <summary>Config #${id} - ${mods} modules - ${fmtNum(kwp)} kWp</summary>
+          <div class="kvs">
+            <div><span class="key">Orientation #</span><span class="val">${orientationId}</span></div>
+            <div><span class="key">Tilt</span><span class="val">${tilt}°</span></div>
+            <div><span class="key">Azimuth (compass)</span><span class="val">${az}°</span></div>
+            <div><span class="key">Strings</span><span class="val">${strings}</span></div>
+            <div><span class="key">Modules / string</span><span class="val">${series}</span></div>
+            <div><span class="key">U mpp</span><span class="val">${a.u_mpp_v ?? "—"} V</span></div>
+            <div><span class="key">I mpp</span><span class="val">${a.i_mpp_a ?? "—"} A</span></div>
+          </div>
+        `;
+        el.appendChild(details);
+      }
+    }
 
     function renderInverterMonthly(invSummary) {
-        const el = document.getElementById("inverters");
-        if (!invSummary || Object.keys(invSummary).length === 0) {
-            el.innerHTML = "<p class='muted'>No per-inverter monthly allocation found.</p>";
-            return;
-        }
+      const el = document.getElementById("inverters");
+      if (!invSummary || Object.keys(invSummary).length === 0) {
+        el.innerHTML = "<p class='muted'>No per-inverter monthly allocation found.</p>";
+        return;
+      }
 
-        el.innerHTML = "";
-        const monthOrder = [
-            "January","February","March","April","May","June",
-            "July","August","September","October","November","December"
-        ];
+      el.innerHTML = "";
+      const monthOrder = [
+        "January","February","March","April","May","June",
+        "July","August","September","October","November","December"
+      ];
 
-        for (const [invId, inv] of Object.entries(invSummary)) {
-            const displayName = inv.invName || invId;
-            const details = document.createElement("details");
-            details.innerHTML = `
-            <summary>${displayName} &middot; ${fmtNum(inv.capacity_kwp)} kWp &middot; ${fmtNum(inv.annual_production_kwh)} kWh/yr</summary>
-            `;
+      for (const [invId, inv] of Object.entries(invSummary)) {
+        const displayName = inv.description || invId;
+        const details = document.createElement("details");
+        details.innerHTML = `
+          <summary>${displayName} · ${fmtNum(inv.capacity_kwp)} kWp · ${fmtNum(inv.annual_production_kwh)} kWh/yr</summary>
+        `;
 
         const monthly = inv.monthly_production || {};
         if (Object.keys(monthly).length) {
@@ -450,7 +532,7 @@
 
     function fmtNum(v) {
       if (v == null || Number.isNaN(+v)) return "—";
-      return Number(v).toLocaleString(undefined, { maximumFractionDigits: 1 });
+      return Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 });
     }
   </script>
 </body>
