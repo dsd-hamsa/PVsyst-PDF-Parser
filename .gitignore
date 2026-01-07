@@ -1,16 +1,23 @@
-parser5.1.py
 .devcontainer/
-*.pdf
 .venv
 __pycache__
 *.txt
 *.json
-*.pdf
-AEPs/
 *.csv
 *Zone.Identifier
+
+# Large binaries / reports
+*.pdf
+
+# Local tooling caches
+.ruff_cache
+.mypy_cache
+
+# Local scratch / backups
+AEPs/
 badparse/
 ./pvsyst-extractor/
 backup/
+--output
 ocr_extractor.py
 .gitignore

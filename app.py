@@ -1,4 +1,8 @@
-"""API for parsing PVsyst PDF files."""
+"""API for parsing PVsyst PDF files (V3).
+
+This version is compatible with `pvsyst_parser.py` and returns the V3 JSON
+structure without writing output files to disk.
+"""
 
 import tempfile
 from pathlib import Path
@@ -9,9 +13,8 @@ from fastapi.responses import JSONResponse
 
 from pvsyst_parser import PVsystParser
 
-app = FastAPI(title="PVsyst Parser API")
+app = FastAPI(title="PVsyst Parser API (V3)")
 
-# Allow JS frontends (e.g., GitHub Pages) to talk to this API
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -23,7 +26,8 @@ app.add_middleware(
 
 @app.post("/api/parse")
 async def parse_pvsyst_pdf(file: UploadFile = File(...)):
-    """Parse an uploaded PVsyst PDF file and return the parsed data."""
+    """Parse an uploaded PVsyst PDF file and return parsed data."""
+
     if not file.filename or not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Please upload a PDF file.")
 
@@ -34,17 +38,39 @@ async def parse_pvsyst_pdf(file: UploadFile = File(...)):
             contents = await file.read()
             tmp.write(contents)
             tmp_path = tmp.name
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         raise HTTPException(status_code=500, detail=f"Failed to save file: {e}") from e
 
-    # Run your parser
     parser = PVsystParser()
+
     try:
-        data = parser.parse_pdf(tmp_path, generate_outputs=False)
-    except Exception as e:
+        # Run the V3 parsing pipeline without generating output files.
+        blocks = parser.extract_text_blocks(tmp_path)
+
+        parser.sections = parser.identify_sections(blocks)
+        parser.section_contents = parser.extract_section_contents(blocks, parser.sections)
+
+        parser.extract_equipment_info(blocks)
+        parser.orientations = parser.extract_orientations(blocks)
+
+        if "Array Losses" in parser.section_contents and parser.section_contents["Array Losses"]:
+            try:
+                parser.array_losses = parser.parse_array_losses_section(
+                    parser.section_contents["Array Losses"][0]
+                )
+            except Exception:
+                parser.array_losses = {}
+
+        parser.arrays = parser.parse_arrays_from_text(blocks, interactive=False)
+        parser.module_types = parser._collect_module_types()
+        parser.inverter_types = parser._collect_inverter_types()
+        parser.calculate_monthly_production(blocks)
+
+        data = parser.to_dict()
+
+    except Exception as e:  # noqa: BLE001
         raise HTTPException(status_code=500, detail=f"Parsing failed: {e}") from e
     finally:
-        # clean up uploaded file
         try:
             Path(tmp_path).unlink(missing_ok=True)
         except OSError:
@@ -55,5 +81,4 @@ async def parse_pvsyst_pdf(file: UploadFile = File(...)):
 
 @app.get("/api/health")
 def health():
-    """Health check endpoint."""
     return {"status": "ok"}

@@ -1,248 +1,140 @@
-# PVsyst PDF Parser
+# PVsyst PDF Parser (V3)
 
-A comprehensive parser for PVsyst PDF reports that extracts structured data including arrays, orientations, inverter configurations, and monthly production data. Features both a command-line interface and a web-based interface for easy PDF analysis.
+V3 is a fast, monitoring-oriented PVsyst report parser.
 
-## Features
+It is designed to produce a single JSON payload that contains:
+- Raw inverter IDs (`INV01`, `INV02`, …) as stable keys
+- A human-friendly inverter `description`
+- A per-inverter `combined_configuration` array that consolidates MPPT allocation + the config fields you need for monitoring
 
-- **Complex Notation Parsing**: Handles sophisticated inverter/MPPT configurations like "INV02-05, 7,8 MPPT 1-5"
-- **Monthly Production**: Estimates monthly energy production per inverter based on module counts *(as an average; future updates will include azimuth & tilt variances)*
-- **Structured Output**: Generates clean JSON and text reports with separated array configurations and associations
-- **Web Interface**: Upload PDFs through a modern web interface
-- **Cross-Version Compatibility**: Works with different PVsyst versions (V7, V7.4, V8.x)
-- **Table Extraction**: Uses camelot for accurate table parsing from PDF reports
+V3 is implemented in `pvsyst_parser.py`.
+
+## What’s New in V3
+
+- **Text-only parsing (faster):** uses `pdfplumber` only (no Camelot/table extraction).
+- **Monitoring-friendly output:** per inverter, a single `combined_configuration` list that includes MPPT → config mapping plus config details.
+- **Stable IDs + friendly names:** JSON keys remain raw inverter IDs; `description` provides a display label.
+- **`config_id` naming:** MPPT associations reference `config_id` instead of `array_id`.
+- **Current handling:** `i_mpp_a` in `combined_configuration` is scaled to the MPPT based on strings-per-config and strings-per-MPPT.
+- **Multiple module models (per config/MPPT):** module manufacturer/model is tracked per array configuration (and therefore can vary by inverter/MPPT). See `module_types` + `module_type_id` in the output.
+- **Single-configuration fallback:** supports reports with no `Array #` blocks (one uniform config).
+- **Industry heuristics:** can infer MPPT topology for common inverter families:
+  - SMA Core1: 6 MPPT, max 2 strings/MPPT
+  - CHINT / CPS: 3 MPPT, max 6 strings/MPPT
 
 ## Installation
 
 ### Prerequisites
 
-- Python 3.7+
-- pip
+- Python 3.9+ recommended
 
-### Install Dependencies
-
-```bash
-pip install camelot-py[cv] pdfplumber fastapi uvicorn
-```
-
-**Note**: `camelot-py[cv]` includes OpenCV for better table detection. On some systems, you may need additional dependencies:
+### Dependencies
 
 ```bash
-# Ubuntu/Debian
-sudo apt-get install python3-tk ghostscript
-
-# macOS
-brew install ghostscript tcl-tk
+pip install pdfplumber fastapi uvicorn
 ```
 
-## Usage
+## CLI Usage
 
-### Command Line Interface
-
-Parse a PVsyst PDF and generate reports:
+Parse a PVsyst PDF and write outputs (text + JSON) into an output directory:
 
 ```bash
-python pvsyst_parser.py "path/to/your/pvsyst_report.pdf"
+python pvsyst_parser.py "path/to/report.pdf" --output-dir "./out"
 ```
 
-Optional: specify output directory:
+Outputs:
+- `*_analysis.txt`
+- `*_structured.json`
+
+## API Usage (FastAPI)
+
+V3 API entry point is `app.py`.
+
+Run on port **8888**:
 
 ```bash
-python pvsyst_parser.py "report.pdf" "/path/to/output/dir"
+uvicorn app:app --reload --host 0.0.0.0 --port 8888
 ```
 
-This will generate:
-- `report.txt`: Comprehensive text report
-- `report.json`: Structured JSON data
+Endpoints:
+- `POST /api/parse` (multipart form field `file`)
+- `GET /api/health`
 
-### Web Interface
-
-Start the web server:
+Example:
 
 ```bash
-uvicorn app:app --reload
+curl -X POST "http://localhost:8888/api/parse" \
+  -H "accept: application/json" \
+  -H "Content-Type: multipart/form-data" \
+  -F "file=@your_pvsyst_report.pdf"
 ```
 
-Open your browser to `http://localhost:8000` and upload a PVsyst PDF through the web interface.
+Notes:
+- `app.py` runs the V3 parse pipeline and returns JSON **without writing files**.
 
-### API Usage
+## Web UI Usage
 
-The FastAPI backend provides endpoints:
+Open `index.html` in a browser.
 
-- `POST /api/parse`: Upload and parse a PDF
-- `GET /api/health`: Health check
+By default it calls:
+- `http://localhost:8888/api/parse`
 
-Example API call:
+If deploying elsewhere, update `API_BASE` in `index.html`.
 
-```bash
-curl -X POST "http://localhost:8000/api/parse" \
-     -H "accept: application/json" \
-     -H "Content-Type: multipart/form-data" \
-     -F "file=@your_pvsyst_report.pdf"
-```
+## Output Schema (V3)
 
-## Output Structure
+### Top-level keys
 
-### JSON Output
+- `metadata`
+- `pv_module`
+- `inverter` (global inverter info from PVsyst equipment table, if present)
+- `module_types` (distinct PV module types detected)
+- `inverter_types` (distinct inverter types detected)
+- `array_configurations` (keyed by `config_id`)
+- `associations` (keyed by raw inverter ID)
+- `inverter_summary` (keyed by raw inverter ID)
+- `system_monthly_production`
+- `system_monthly_globhor`
+- `orientations`
 
-```json
-{
-  "metadata": {
-    "total_arrays": 3,
-    "total_inverters": 2,
-    "total_system_capacity_kwp": 150.5,
-    "total_annual_production_kwh": 225000
-  },
-  "pv_module": {
-    "manufacturer": "Hanwha Q Cells",
-    "model": "Q.Peak-Duo-XL-G11S.3",
-    "unit_nom_power_w": 595
-  },
-  "inverter": {
-    "manufacturer": "SMA",
-    "model": "Sunny Tripower_Core1 62-US-41",
-    "unit_nom_power_kw": 62.5
-  },
-  "array_configurations": {
-    "1": {
-      "array_id": "1",
-      "inverter_ids": [
-        "INV01"
-      ],
-      "inverter_id": "INV01",
-      "mppt_count": 1,
-      "mppt_share_percent": 35.0,
-      "inverter_unit_fraction": 0.3,
-      "number_of_modules": 51,
-      "nominal_stc_kwp_from_module": 27.795,
-      "nominal_stc_kwp": 27.8,
-      "strings": 3,
-      "modules_in_series": 17,
-      "u_mpp_v": 646.0,
-      "i_mpp_a": 39.0,
-      "orientation_id": 1,
-      "tilt": 9.0,
-      "azimuth_pvsyst_deg": 0.0,
-      "azimuth_deg": 180.0,
-      "azimuth_compass_deg": 180.0
-    }
-  },
-  "associations": {
-    "INV01": {
-      "MPPT 1": {
-        "array_id": "1",
-        "strings": 3,
-        "modules": 51,
-        "dc_kwp": 27.795
-      }
-    }
-  },
-  "inverter_summary": {
-    "INV01": {
-      "capacity_kwp": 80.1,
-      "annual_production_kwh": 130246.0,
-      "specific_production_kwh_per_kwp": 1626.0,
-      "monthly_production": {
-        "January": 7717.0,
-        "February": 8528.0,
-        "March": 11929.0,
-        "April": 13186.0,
-        "May": 13777.0,
-        "June": 13123.0,
-        "July": 14111.0,
-        "August": 13440.0,
-        "September": 11136.0,
-        "October": 9208.0,
-        "November": 7144.0,
-        "December": 6947.0
-      }
-    }
-  }
-}
-```
+### The monitoring-friendly view
 
-## Key Capabilities
+For each inverter `INVxx`, look at:
 
-### Inverter Range Parsing
+- `inverter_summary[INVxx].description`
+- `inverter_summary[INVxx].combined_configuration[]`
+- `inverter_summary[INVxx].pv_modules` (all PV module types feeding that inverter)
 
-Supports complex notation:
-- `INV01`: Single inverter
-- `INV02-05`: Range of inverters
-- `INV02-05, 7,8`: Mixed ranges and singles
-- `INV 9-11,13`: Space-separated ranges
+Notes:
+- `inverter_summary[INVxx].pv_module` is only populated when that inverter uses exactly one module type; otherwise use `pv_modules`.
 
-### MPPT Configuration
+Each entry in `combined_configuration` is one MPPT row and includes:
+- `mppt`
+- `config_id`
+- `module_type_id` (points to `module_types[]`)
+- allocation: `strings`, `modules`, `dc_kwp`
+- config fields: `tilt`, `azimuth`, `modules_in_series`, `u_mpp_v`, `i_mpp_a`
 
-Handles MPPT assignments:
-- `MPPT 1-3`: Range of MPPTs
-- `MPPT 1,2,4`: Specific MPPTs
-- Automatic expansion of inverter × MPPT combinations
+### About `i_mpp_a`
 
-### Monthly Production Allocation
+- `array_configurations[config_id].i_mpp_a` represents the **total current for the full configuration** (all strings in parallel).
+- `combined_configuration[].i_mpp_a` represents the **total current for that MPPT**, computed as:
 
-- Extracts system-level monthly production from PVsyst tables
-- Allocates production to individual inverters based on module count ratios
-- Provides per-inverter monthly energy estimates
+`(config_i_mpp_a / config_strings_total) * strings_on_that_mppt`
 
-## Dependencies
+## Single-Configuration Reports (No `Array #` blocks)
 
-- **camelot-py**: PDF table extraction
-- **pdfplumber**: PDF text extraction
-- **fastapi**: Web API framework
-- **uvicorn**: ASGI server
-- **opencv-python**: Image processing for table detection
+Some PVsyst reports represent a site as one uniform configuration and do not include separate `Array #n` blocks.
 
-## Development
+V3 detects this and synthesizes one `config_id = "1"`, then distributes strings across MPPTs using the inferred inverter model topology.
 
-### Project Structure
+V3 also records these diagnostic fields inside `array_configurations["1"]`:
+- `inferred_inverters_reported`
+- `inferred_inverters_required`
+- `inferred_inverters_used`
 
-```
-.
-├── pvsyst_parser.py   # Core parsing logic
-├── app.py             # FastAPI web application
-├── index.html         # Web interface
-├── requirements.txt   # Dependencies
-└── README.md          # This file
-```
+## Files
 
-### Adding New Features
-
-The parser is modular and extensible. Key classes:
-
-- `PVsystParser`: Main parser class
-- Methods for extracting different sections (arrays, orientations, monthly data)
-- Flexible text parsing that adapts to PVsyst version changes
-
-## Troubleshooting
-
-### Common Issues
-
-1. **Table extraction fails**: Ensure camelot dependencies are installed with `[cv]` extra
-2. **Text extraction issues**: Check that pdfplumber can read your PDF
-3. **Web interface not loading**: Verify uvicorn is running and port 8000 is accessible
-
-### PDF Compatibility
-
-- Tested with PVsyst V7.x and V8.x reports
-- Works with standard PVsyst PDF exports
-- May require adjustments for heavily customized reports (like array headers)
-
-## License
-
-MIT License (whatever that means)
-
-## Contributing
-
-Contributions welcome! Please:
-
-1. Fork the repository
-2. Create a feature branch
-3. Add tests for new functionality
-4. Submit a pull request
-
-## Support
-
-For issues or questions:
-
-- Open an issue on GitHub
-- Check the troubleshooting section above
-- Ensure your PVsyst PDF is a standard export format
+- `pvsyst_parser.py` — core V3 parser
+- `app.py` — V3 FastAPI service
+- `index.html` — V3 web UI
