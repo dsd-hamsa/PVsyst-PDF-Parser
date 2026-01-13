@@ -1003,6 +1003,22 @@ class PVsystParser:
 
         return array_data
 
+    def _parse_total_inverter_power(self) -> Optional[int]:
+        """Parse the total number of inverters from the 'Total Inverter Power' section if present."""
+        if "Total Inverter Power" not in self.section_contents:
+            return None
+
+        total_inv_text = "\n".join(self.section_contents["Total Inverter Power"])
+        m_inv = re.search(
+            r"Number of inverters\s*(\d+)\s*units?", total_inv_text, re.IGNORECASE
+        )
+        if not m_inv:
+            m_inv = re.search(
+                r"Nb\.\s*of\s*units\s*(\d+)\s*units?", total_inv_text, re.IGNORECASE
+            )
+
+        return int(m_inv.group(1)) if m_inv else None
+
     def parse_arrays_from_text(
         self, blocks: Dict[int, Dict[str, Any]], interactive: bool = False
     ) -> Dict[str, Dict[str, Any]]:
@@ -1101,6 +1117,26 @@ class PVsystParser:
         for arr in arrays.values():
             arr["expanded_combinations"] = self.expand_array_notation(arr)
             self.expanded_arrays.extend(arr["expanded_combinations"])
+
+        # Validate inverter count against Total Inverter Power section
+        if self.total_inverters_from_power_section is not None:
+            parsed_inverters = len(
+                set(combo["inverter"] for combo in self.expanded_arrays)
+            )
+            if parsed_inverters != self.total_inverters_from_power_section:
+                print(f"  WARNING: Inverter count mismatch!")
+                print(f"    Parsed from arrays: {parsed_inverters}")
+                print(
+                    f"    From Total Inverter Power section: {self.total_inverters_from_power_section}"
+                )
+                print("    Array block texts for debugging:")
+                for arr_id, arr_data in arrays.items():
+                    print(
+                        f"    Array {arr_id}: {arr_data.get('original_block_text', 'N/A')[:200]}..."
+                    )
+                print(
+                    "    Consider updating regex patterns if this is a parsing edge case."
+                )
 
         # If we have any combos but some MPPTs are unknown, assign only missing
         if self.expanded_arrays:
@@ -1938,6 +1974,9 @@ class PVsystParser:
 
         self.sections = self.identify_sections(blocks)
         self.section_contents = self.extract_section_contents(blocks, self.sections)
+
+        # Parse total inverter count from "Total Inverter Power" section if present
+        self.total_inverters_from_power_section = self._parse_total_inverter_power()
 
         self.extract_equipment_info(blocks)
         self.orientations = self.extract_orientations(blocks)
