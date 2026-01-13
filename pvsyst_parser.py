@@ -128,6 +128,7 @@ class PVsystParser:
         section_patterns = {
             "Project Summary": r"Project summary|System summary|Results summary",
             "PV Array Characteristics": r"PV Array Characteristics|Array Characteristics|PV Modules|Module Configuration",
+            "Total Inverter Power": r"Total inverter power",
             "System Losses": r"System losses|Loss diagram",
             "Array Losses": r"Array losses",
             "Horizon Definition": r"Horizon definition",
@@ -853,19 +854,20 @@ class PVsystParser:
         }
         remaining = int(total_strings)
 
-        for inv in inverter_ids:
-            while remaining > 0:
-                progressed = False
-                for mppt in mppt_ids:
-                    if remaining <= 0:
-                        break
-                    key = (inv, mppt)
-                    if alloc[key] < strings_per_mppt_max:
-                        alloc[key] += 1
-                        remaining -= 1
-                        progressed = True
-                if not progressed:
-                    break  # this inverter saturated
+        # Round-robin allocation across all inverter-MPPT endpoints
+        all_endpoints = [(inv, mppt) for mppt in mppt_ids for inv in inverter_ids]
+        while remaining > 0:
+            progressed = False
+            for inv, mppt in all_endpoints:
+                if remaining <= 0:
+                    break
+                key = (inv, mppt)
+                if alloc[key] < strings_per_mppt_max:
+                    alloc[key] += 1
+                    remaining -= 1
+                    progressed = True
+            if not progressed:
+                break
 
         if remaining > 0:
             print(
@@ -873,7 +875,7 @@ class PVsystParser:
                 "distributing beyond per-MPPT max"
             )
             # Best-effort: distribute remaining across all endpoints round-robin without cap.
-            all_endpoints = [(inv, mppt) for inv in inverter_ids for mppt in mppt_ids]
+            all_endpoints = [(inv, mppt) for mppt in mppt_ids for inv in inverter_ids]
             idx = 0
             while remaining > 0 and all_endpoints:
                 inv, mppt = all_endpoints[idx % len(all_endpoints)]
@@ -901,7 +903,16 @@ class PVsystParser:
         if not m_mods:
             return None
 
-        m_inv = re.search(r"Number of inverters\s*(\d+)\s*units?", text, re.IGNORECASE)
+        # Look for "Total inverter power" followed by "Number of inverters" and the number (possibly on next lines)
+        m_inv = re.search(
+            r"Total\s+inverter\s+power.*?(?:Number of inverters|Nb\.\s*of\s*units).*?(\d+)",
+            text,
+            re.IGNORECASE | re.DOTALL,
+        )
+        if not m_inv:
+            m_inv = re.search(
+                r"Number of inverters\s*(\d+)\s*units?", text, re.IGNORECASE
+            )
         if not m_inv:
             m_inv = re.search(
                 r"Nb\.\s*of\s*units\s*(\d+)\s*units?", text, re.IGNORECASE
@@ -938,9 +949,9 @@ class PVsystParser:
             strings + strings_per_inverter_max - 1
         ) // strings_per_inverter_max
 
+        # For single configuration, use the explicitly reported number of inverters
+        # (from Total inverter power section) instead of calculating minimum required
         inverter_units_used = inverter_units_reported
-        if inverter_units_reported > inverter_units_required:
-            inverter_units_used = inverter_units_required
 
         inverter_ids = [f"INV{i:02d}" for i in range(1, inverter_units_used + 1)]
         mppt_ids = [f"MPPT {i}" for i in range(1, mppt_per_inv + 1)]
