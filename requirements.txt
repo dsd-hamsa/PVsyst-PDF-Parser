@@ -1,3 +1,4 @@
-camelot-py
-fastapi
 pdfplumber
+fastapi
+uvicorn
+python-multipart
