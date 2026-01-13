@@ -1,4 +1,4 @@
-# PVsyst PDF Parser
+# PVsyst PDF Parser (V3)
 
 A comprehensive parser for PVsyst PDF reports that extracts structured data including arrays, orientations, inverter configurations, and monthly production data. Features both a command-line interface and a web-based interface for easy PDF analysis.
 
@@ -9,7 +9,9 @@ A comprehensive parser for PVsyst PDF reports that extracts structured data incl
 - **Structured Output**: Generates clean JSON and text reports with separated array configurations and associations
 - **Web Interface**: Upload PDFs through a modern web interface
 - **Cross-Version Compatibility**: Works with different PVsyst versions (V7, V7.4, V8.x)
-- **Table Extraction**: Uses camelot for accurate table parsing from PDF reports
+- **Single-Array Support**: Special handling for reports with uniform configurations and round-robin string allocation
+- **Validation**: Cross-validates parsed data against authoritative "Total Inverter Power" sections
+- **Enhanced Debugging**: Detailed warnings for parsing edge cases with array block inspection
 
 ## Installation
 
@@ -21,18 +23,10 @@ A comprehensive parser for PVsyst PDF reports that extracts structured data incl
 ### Install Dependencies
 
 ```bash
-pip install camelot-py[cv] pdfplumber fastapi uvicorn
+pip install pdfplumber fastapi uvicorn
 ```
 
-**Note**: `camelot-py[cv]` includes OpenCV for better table detection. On some systems, you may need additional dependencies:
-
-```bash
-# Ubuntu/Debian
-sudo apt-get install python3-tk ghostscript
-
-# macOS
-brew install ghostscript tcl-tk
-```
+**Note**: V3 uses text-only parsing with pdfplumber for faster, more reliable extraction. No table extraction dependencies required.
 
 ## Usage
 
@@ -41,28 +35,30 @@ brew install ghostscript tcl-tk
 Parse a PVsyst PDF and generate reports:
 
 ```bash
-python pvsyst_parser.py "path/to/your/pvsyst_report.pdf"
-```
-
-Optional: specify output directory:
-
-```bash
-python pvsyst_parser.py "report.pdf" "/path/to/output/dir"
+python pvsyst_parser.py "path/to/your/pvsyst_report.pdf" --output-dir "./output"
 ```
 
 This will generate:
-- `report.txt`: Comprehensive text report
-- `report.json`: Structured JSON data
+- `*_analysis_v3.txt`: Comprehensive text report
+- `*_structured_v3.json`: Structured JSON data with V3 schema
+
+**V3 Features:**
+- Faster text-only parsing (no table extraction)
+- Monitoring-friendly JSON structure
+- Round-robin string allocation for single arrays
+- Validation against "Total Inverter Power" sections
 
 ### Web Interface
 
 Start the web server:
 
 ```bash
-uvicorn app:app --reload
+uvicorn app:app --reload --host 0.0.0.0 --port 8888
 ```
 
-Open your browser to `http://localhost:8000` and upload a PVsyst PDF through the web interface.
+Open your browser to `http://localhost:8888` and upload a PVsyst PDF through the web interface.
+
+**V3 Interface:** Modern UI that displays combined MPPT configurations and detects all inverter types.
 
 ### API Usage
 
@@ -160,6 +156,79 @@ curl -X POST "http://localhost:8000/api/parse" \
 }
 ```
 
+## V3 Features & Enhancements
+
+### What's New in V3
+
+- **Text-Only Parsing**: Uses pdfplumber only for faster, more reliable extraction (no Camelot table dependencies)
+- **Monitoring-Friendly Output**: Per-inverter `combined_configuration` array consolidates MPPT allocation with config fields
+- **Single-Configuration Support**: Handles reports with uniform arrays using round-robin string distribution
+- **Industry Heuristics**: Automatic MPPT topology detection for common inverters (SMA Core1: 6 MPPT, CHINT/CPS: 3 MPPT)
+- **Validation System**: Cross-validates parsed inverter counts against "Total Inverter Power" sections with debugging output
+- **Enhanced Debugging**: Detailed warnings for parsing mismatches with array block inspection
+
+### V3 JSON Schema
+
+```json
+{
+  "metadata": {
+    "version": "v3",
+    "total_arrays": 1,
+    "total_inverters": 12,
+    "total_expanded_combinations": 72
+  },
+  "array_configurations": {
+    "1": {
+      "config_id": "1",
+      "inverter_ids": ["INV01", "INV02", ..., "INV12"],
+      "mppt_ids": ["MPPT 1", "MPPT 2", ..., "MPPT 6"],
+      "inferred_single_config": true,
+      "inferred_mppt_per_inverter": 6,
+      "inferred_strings_per_mppt_max": 2
+    }
+  },
+  "associations": {
+    "INV01": {
+      "MPPT 1": {"config_id": "1", "strings": 2, "modules": 34, "dc_kwp": 18.36},
+      "MPPT 2": {"config_id": "1", "strings": 2, ...}
+    }
+  },
+  "inverter_summary": {
+    "INV01": {
+      "description": "Inv 01 - (62.5 kW) - SMA Sunny Tripower_Core1 62-US-41",
+      "combined_configuration": [
+        {
+          "mppt": "MPPT 1",
+          "config_id": "1",
+          "strings": 2,
+          "modules": 34,
+          "dc_kwp": 18.36,
+          "tilt": 9.0,
+          "azimuth": 205.0,
+          "modules_in_series": 17
+        }
+      ]
+    }
+  }
+}
+```
+
+### Single-Array Round-Robin Allocation
+
+For reports with single configurations, V3 distributes strings round-robin across all available MPPT endpoints:
+
+- **Pattern**: INV01-MPPT1, INV02-MPPT1, INV03-MPPT1, ..., INV01-MPPT2, INV02-MPPT2, etc.
+- **Benefits**: Fair distribution, optimal capacity utilization, no false "over-limit" warnings
+- **Validation**: Cross-checks against "Total Inverter Power" section for accuracy
+
+### Validation & Debugging
+
+V3 includes built-in validation that compares parsed data against authoritative sections:
+
+- **Inverter Count Validation**: Matches parsed count with "Total Inverter Power" section
+- **Warning Output**: Clear messages for mismatches with debugging details
+- **Edge Case Handling**: Helps identify regex failures in complex PVsyst formats
+
 ## Key Capabilities
 
 ### Inverter Range Parsing
@@ -185,11 +254,11 @@ Handles MPPT assignments:
 
 ## Dependencies
 
-- **camelot-py**: PDF table extraction
-- **pdfplumber**: PDF text extraction
+- **pdfplumber**: PDF text extraction (primary parsing engine)
 - **fastapi**: Web API framework
 - **uvicorn**: ASGI server
-- **opencv-python**: Image processing for table detection
+
+**V3 Changes**: Removed Camelot table extraction dependency for faster, more reliable text-only parsing.
 
 ## Development
 
@@ -197,9 +266,9 @@ Handles MPPT assignments:
 
 ```
 .
-├── pvsyst_parser.py   # Core parsing logic
-├── app.py             # FastAPI web application
-├── index.html         # Web interface
+├── pvsyst_parser.py   # V3 core parsing logic with validation
+├── app.py             # V3 FastAPI web application
+├── index.html         # V3 web interface
 ├── requirements.txt   # Dependencies
 └── README.md          # This file
 ```
@@ -224,7 +293,8 @@ The parser is modular and extensible. Key classes:
 
 - Tested with PVsyst V7.x and V8.x reports
 - Works with standard PVsyst PDF exports
-- May require adjustments for heavily customized reports (like array headers)
+- **V3 Enhancements**: Better handling of single-array reports and validation warnings for edge cases
+- May require adjustments for heavily customized reports (use validation warnings for debugging)
 
 ## License
 
