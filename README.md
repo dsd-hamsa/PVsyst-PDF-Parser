@@ -44,10 +44,24 @@ Parse a PVsyst PDF and generate reports:
 python pvsyst_parser.py "path/to/your/pvsyst_report.pdf"
 ```
 
+Generate an additional PowerTrack patch JSON (per inverter):
+
+```bash
+python3 pvsyst_parser.py "path/to/your/pvsyst_report.pdf" --powertrack-patch
+```
+
+This writes `<pdf_stem>_powertrack_patch.json` alongside the normal outputs. The JSON is keyed as `PV0`, `PV1`, ... (derived from `INV01` -> `PV0`, `INV02` -> `PV1`, etc).
+
 Optional: specify output directory:
 
 ```bash
 python pvsyst_parser.py "report.pdf" "/path/to/output/dir"
+```
+
+Optional: specify PowerTrack patch output path:
+
+```bash
+python3 pvsyst_parser.py "report.pdf" --output-dir "/path/to/output/dir" --powertrack-patch --powertrack-patch-path "/path/to/output/dir/pt_patch.json"
 ```
 
 This will generate:

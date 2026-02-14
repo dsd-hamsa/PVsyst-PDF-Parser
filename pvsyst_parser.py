@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """PVsyst PDF Parser V3
 
-This version merges: 
+This version merges:
   robust equipment parsing, inverter-type propagation,
   array-loss parsing, and per-MPPT string/module/DC-kWp allocation
   and stronger inverter-range parsing.
@@ -30,10 +30,10 @@ from typing import Any, Dict, List, Optional, Tuple
 import pdfplumber
 
 
-
 # -----------------------------------------------------------------------------
 # Helper functions
 # -----------------------------------------------------------------------------
+
 
 def clean_power_to_kw_or_w(power_str: str) -> Optional[float]:
     """Extract numeric portion and interpret MW/kW when present.
@@ -114,11 +114,15 @@ class PVsystParser:
     # Section identification
     # -------------------------------------------------------------------------
 
-    def identify_sections(self, blocks: Dict[int, Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+    def identify_sections(
+        self, blocks: Dict[int, Dict[str, Any]]
+    ) -> Dict[str, Dict[str, Any]]:
         """Identify high-level sections in the document."""
         print("  Identifying sections...")
 
-        all_text = "\n".join(blocks[p].get("full_text") or "" for p in sorted(blocks.keys()))
+        all_text = "\n".join(
+            blocks[p].get("full_text") or "" for p in sorted(blocks.keys())
+        )
 
         # Union of patterns from both versions.
         section_patterns = {
@@ -148,7 +152,9 @@ class PVsystParser:
         self, blocks: Dict[int, Dict[str, Any]], sections: Dict[str, Dict[str, Any]]
     ) -> Dict[str, List[str]]:
         """Extract full text content for each identified section."""
-        all_text = "\n".join(blocks[p].get("full_text") or "" for p in sorted(blocks.keys()))
+        all_text = "\n".join(
+            blocks[p].get("full_text") or "" for p in sorted(blocks.keys())
+        )
 
         all_starts: List[Tuple[int, str]] = []
         for sec_name, sec_data in sections.items():
@@ -170,7 +176,9 @@ class PVsystParser:
     # -------------------------------------------------------------------------
 
     @staticmethod
-    def _two_column_values(line: str, label: str) -> Tuple[Optional[str], Optional[str]]:
+    def _two_column_values(
+        line: str, label: str
+    ) -> Tuple[Optional[str], Optional[str]]:
         """Parse PVsyst two-column rows with repeated labels or wide spacing."""
         if not line or not label:
             return (None, None)
@@ -227,8 +235,12 @@ class PVsystParser:
         module_info: Dict[str, Any] = {}
         inverter_info: Dict[str, Any] = {}
 
-        all_text = "\n".join(blocks[p].get("full_text") or "" for p in sorted(blocks.keys()))
-        m = re.search(r"\bPV\s+module\b(.{0,2200})", all_text, re.IGNORECASE | re.DOTALL)
+        all_text = "\n".join(
+            blocks[p].get("full_text") or "" for p in sorted(blocks.keys())
+        )
+        m = re.search(
+            r"\bPV\s+module\b(.{0,2200})", all_text, re.IGNORECASE | re.DOTALL
+        )
         if not m:
             self.module_info = module_info
             self.inverter_info = inverter_info
@@ -237,7 +249,10 @@ class PVsystParser:
         block = "PV module\n" + m.group(1)
         lines = [ln.strip() for ln in block.splitlines() if ln.strip()]
 
-        manu_line = next((ln for ln in lines if re.search(r"\bManufacturer\b", ln, re.IGNORECASE)), None)
+        manu_line = next(
+            (ln for ln in lines if re.search(r"\bManufacturer\b", ln, re.IGNORECASE)),
+            None,
+        )
         if manu_line:
             left, right = self._two_column_values(manu_line, "Manufacturer")
             if left:
@@ -245,7 +260,9 @@ class PVsystParser:
             if right:
                 inverter_info["manufacturer"] = right
 
-        model_line = next((ln for ln in lines if re.search(r"\bModel\b", ln, re.IGNORECASE)), None)
+        model_line = next(
+            (ln for ln in lines if re.search(r"\bModel\b", ln, re.IGNORECASE)), None
+        )
         if model_line:
             left, right = self._two_column_values(model_line, "Model")
             if left:
@@ -253,7 +270,14 @@ class PVsystParser:
             if right:
                 inverter_info["model"] = right
 
-        power_line = next((ln for ln in lines if re.search(r"Unit\s+Nom\.?\s*Power", ln, re.IGNORECASE)), None)
+        power_line = next(
+            (
+                ln
+                for ln in lines
+                if re.search(r"Unit\s+Nom\.?\s*Power", ln, re.IGNORECASE)
+            ),
+            None,
+        )
         if power_line:
             left, right = self._two_column_values(power_line, "Unit Nom. Power")
             if left is None and right is None:
@@ -265,7 +289,9 @@ class PVsystParser:
                 if numeric is not None:
                     lower_left = left.lower()
                     if "mw" in lower_left:
-                        module_info["unit_nom_power_w"] = int(round(numeric * 1_000_000))
+                        module_info["unit_nom_power_w"] = int(
+                            round(numeric * 1_000_000)
+                        )
                     elif "kw" in lower_left:
                         module_info["unit_nom_power_w"] = int(round(numeric * 1_000))
                     else:
@@ -289,15 +315,21 @@ class PVsystParser:
     def pvsyst_azimuth_to_compass(az_pvsyst: float) -> float:
         return (180.0 + az_pvsyst) % 360.0
 
-    def extract_orientations(self, blocks: Dict[int, Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+    def extract_orientations(
+        self, blocks: Dict[int, Dict[str, Any]]
+    ) -> Dict[str, Dict[str, Any]]:
         """Extract Orientation #n entries and associate tilt/azimuth."""
         print("  Extracting orientations...")
 
-        all_text = "\n".join(blocks[p].get("full_text") or "" for p in sorted(blocks.keys()))
+        all_text = "\n".join(
+            blocks[p].get("full_text") or "" for p in sorted(blocks.keys())
+        )
 
         orientations: Dict[str, Dict[str, Any]] = {}
 
-        ori_matches = list(re.finditer(r"Orientation\s*#?\s*(\d+)", all_text, re.IGNORECASE))
+        ori_matches = list(
+            re.finditer(r"Orientation\s*#?\s*(\d+)", all_text, re.IGNORECASE)
+        )
         tilt_matches = list(
             re.finditer(
                 r"Tilt\s*[/]?\s*Azimuth\s*([-\d.]+)\s*[/]\s*([-\d.]+)°?",
@@ -492,20 +524,33 @@ class PVsystParser:
         inv_lines = lines[inv_idx:]
         out: Dict[str, Any] = {}
 
-        manu_line = next((ln for ln in inv_lines if re.search(r"\bManufacturer\b", ln, re.IGNORECASE)), None)
+        manu_line = next(
+            (
+                ln
+                for ln in inv_lines
+                if re.search(r"\bManufacturer\b", ln, re.IGNORECASE)
+            ),
+            None,
+        )
         if manu_line:
             v = self._second_column_value(manu_line, "Manufacturer")
             if v:
                 out["inverter_manufacturer"] = v
 
-        model_line = next((ln for ln in inv_lines if re.search(r"\bModel\b", ln, re.IGNORECASE)), None)
+        model_line = next(
+            (ln for ln in inv_lines if re.search(r"\bModel\b", ln, re.IGNORECASE)), None
+        )
         if model_line:
             v = self._second_column_value(model_line, "Model")
             if v:
                 out["inverter_model"] = v
 
         power_line = next(
-            (ln for ln in inv_lines if re.search(r"Unit\s+Nom\.?\s*Power", ln, re.IGNORECASE)),
+            (
+                ln
+                for ln in inv_lines
+                if re.search(r"Unit\s+Nom\.?\s*Power", ln, re.IGNORECASE)
+            ),
             None,
         )
         if power_line:
@@ -537,7 +582,9 @@ class PVsystParser:
 
         # Fallback: find first INV token in the header
         if not inverter_ids:
-            m_inv_simple = re.search(r"INV\s*([A-Za-z]*)(\d+)", header_line, re.IGNORECASE)
+            m_inv_simple = re.search(
+                r"INV\s*([A-Za-z]*)(\d+)", header_line, re.IGNORECASE
+            )
             if m_inv_simple:
                 prefix = m_inv_simple.group(1)
                 num = int(m_inv_simple.group(2))
@@ -548,7 +595,9 @@ class PVsystParser:
             array_data["inverter_id"] = inverter_ids[0]
 
         # MPPT IDs from header, if present
-        m_mppt_header = re.search(r"MPPT[#\s]*([0-9,\-\s]+)", header_line, re.IGNORECASE)
+        m_mppt_header = re.search(
+            r"MPPT[#\s]*([0-9,\-\s]+)", header_line, re.IGNORECASE
+        )
         if m_mppt_header:
             mppt_ids = self.parse_mppt_range(m_mppt_header.group(1))
             if mppt_ids:
@@ -578,21 +627,29 @@ class PVsystParser:
             array_data["orientation_id"] = int(m_ori.group(1))
 
         # Number of PV modules
-        m_mods = re.search(r"Number of PV modules\s*(\d+)units?", section_text, re.IGNORECASE)
+        m_mods = re.search(
+            r"Number of PV modules\s*(\d+)units?", section_text, re.IGNORECASE
+        )
         if m_mods:
             array_data["number_of_modules"] = int(m_mods.group(1))
 
         unit_wp = self.module_info.get("unit_nom_power_w")
         if isinstance(unit_wp, int) and "number_of_modules" in array_data:
             nominal_kwp_from_module = unit_wp * array_data["number_of_modules"] / 1000.0
-            array_data["nominal_stc_kwp_from_module"] = round(nominal_kwp_from_module, 3)
+            array_data["nominal_stc_kwp_from_module"] = round(
+                nominal_kwp_from_module, 3
+            )
 
-        m_stc = re.search(r"Nominal\s*\(STC\)\s*([\d.]+)kWp", section_text, re.IGNORECASE)
+        m_stc = re.search(
+            r"Nominal\s*\(STC\)\s*([\d.]+)kWp", section_text, re.IGNORECASE
+        )
         if m_stc:
             array_data["nominal_stc_kwp"] = float(m_stc.group(1))
 
         # Modules configuration
-        m_cfg = re.search(r"Modules\s*(\d+)\s*string[s]?\s*x\s*(\d+)", section_text, re.IGNORECASE)
+        m_cfg = re.search(
+            r"Modules\s*(\d+)\s*string[s]?\s*x\s*(\d+)", section_text, re.IGNORECASE
+        )
         if m_cfg:
             strings = int(m_cfg.group(1))
             series = int(m_cfg.group(2))
@@ -601,7 +658,9 @@ class PVsystParser:
             array_data["modules_config_text"] = f"Modules {strings} string x {series}"
 
         # Tilt/Azimuth
-        m_tilt_az = re.search(r"Tilt/Azimuth\s*([-\d.]+)\s*/\s*([-\d.]+)\s*°", section_text, re.IGNORECASE)
+        m_tilt_az = re.search(
+            r"Tilt/Azimuth\s*([-\d.]+)\s*/\s*([-\d.]+)\s*°", section_text, re.IGNORECASE
+        )
         if m_tilt_az:
             tilt = float(m_tilt_az.group(1))
             az_pv = float(m_tilt_az.group(2))
@@ -620,7 +679,9 @@ class PVsystParser:
             array_data["i_mpp_a"] = float(m_impp.group(1))
 
         # Inverter details embedded in this array block (seen in some PVsyst exports)
-        m_eq = re.search(r"\nPV\s*module\b.*", section_text, flags=re.IGNORECASE | re.DOTALL)
+        m_eq = re.search(
+            r"\nPV\s*module\b.*", section_text, flags=re.IGNORECASE | re.DOTALL
+        )
         if m_eq:
             array_data.update(
                 self._parse_pvsyst_inverter_type_block(section_text[m_eq.start() :])
@@ -640,7 +701,11 @@ class PVsystParser:
         print(f"Auto-parsed inverters: {auto_inverter_ids}")
         print(f"Auto-parsed MPPTs: {auto_mppt_ids or 'None'}")
 
-        multi_inv = input("Does this array apply to multiple inverters? (Y/N): ").strip().lower()
+        multi_inv = (
+            input("Does this array apply to multiple inverters? (Y/N): ")
+            .strip()
+            .lower()
+        )
         user_inverter_ids: Optional[List[str]] = None
         if multi_inv == "y":
             inv_input = input("Enter inverter IDs (comma-separated): ").strip()
@@ -652,13 +717,19 @@ class PVsystParser:
                 else:
                     print("Invalid inverter names. Falling back to auto-parsed.")
 
-        spec_mppt = input("Does this array apply to specific MPPTs? (Y/N): ").strip().lower()
+        spec_mppt = (
+            input("Does this array apply to specific MPPTs? (Y/N): ").strip().lower()
+        )
         user_mppt_ids: Optional[List[str]] = None
         if spec_mppt == "y":
-            mppt_input = input("Enter MPPT numbers (comma-separated, e.g., 1,2,3): ").strip()
+            mppt_input = input(
+                "Enter MPPT numbers (comma-separated, e.g., 1,2,3): "
+            ).strip()
             if mppt_input:
                 try:
-                    mppt_nums = [int(num.strip()) for num in mppt_input.split(",") if num.strip()]
+                    mppt_nums = [
+                        int(num.strip()) for num in mppt_input.split(",") if num.strip()
+                    ]
                     user_mppt_ids = [f"MPPT {num}" for num in mppt_nums]
                 except ValueError:
                     print("Invalid MPPT numbers. Falling back to auto-parsed.")
@@ -667,7 +738,9 @@ class PVsystParser:
             n = len(user_mppt_ids)
             base = strings // n
             remainder = strings % n
-            print(f"Distribution: {strings} strings across {n} MPPTs -> {base} base, {remainder} extra")
+            print(
+                f"Distribution: {strings} strings across {n} MPPTs -> {base} base, {remainder} extra"
+            )
 
         return user_inverter_ids, user_mppt_ids
 
@@ -725,10 +798,23 @@ class PVsystParser:
         model = str(self.inverter_info.get("model") or "").lower()
 
         if "sma" in manufacturer and "core" in model:
-            return {"mppt_per_inverter": 6, "strings_per_mppt_max": 2, "source": "SMA Core1 heuristic"}
+            return {
+                "mppt_per_inverter": 6,
+                "strings_per_mppt_max": 2,
+                "source": "SMA Core1 heuristic",
+            }
 
-        if ("chint" in manufacturer) or ("cps" in manufacturer) or ("cps" in model) or ("chint" in model):
-            return {"mppt_per_inverter": 3, "strings_per_mppt_max": 6, "source": "CPS/CHINT heuristic"}
+        if (
+            ("chint" in manufacturer)
+            or ("cps" in manufacturer)
+            or ("cps" in model)
+            or ("chint" in model)
+        ):
+            return {
+                "mppt_per_inverter": 3,
+                "strings_per_mppt_max": 6,
+                "source": "CPS/CHINT heuristic",
+            }
 
         return None
 
@@ -765,7 +851,9 @@ class PVsystParser:
         strings are exhausted or the inverter's MPPTs reach strings_per_mppt_max.
         Then move to the next inverter.
         """
-        alloc: Dict[Tuple[str, str], int] = {(inv, mppt): 0 for inv in inverter_ids for mppt in mppt_ids}
+        alloc: Dict[Tuple[str, str], int] = {
+            (inv, mppt): 0 for inv in inverter_ids for mppt in mppt_ids
+        }
         remaining = int(total_strings)
 
         for inv in inverter_ids:
@@ -806,15 +894,21 @@ class PVsystParser:
         if not re.search(r"PV Array Characteristics", text, re.IGNORECASE):
             return None
 
-        m_mods = re.search(r"Number of PV modules\s*(\d+)\s*units?", text, re.IGNORECASE)
+        m_mods = re.search(
+            r"Number of PV modules\s*(\d+)\s*units?", text, re.IGNORECASE
+        )
         if not m_mods:
-            m_mods = re.search(r"Nb\.\s*of\s*modules\s*(\d+)\s*units?", text, re.IGNORECASE)
+            m_mods = re.search(
+                r"Nb\.\s*of\s*modules\s*(\d+)\s*units?", text, re.IGNORECASE
+            )
         if not m_mods:
             return None
 
         m_inv = re.search(r"Number of inverters\s*(\d+)\s*units?", text, re.IGNORECASE)
         if not m_inv:
-            m_inv = re.search(r"Nb\.\s*of\s*units\s*(\d+)\s*units?", text, re.IGNORECASE)
+            m_inv = re.search(
+                r"Nb\.\s*of\s*units\s*(\d+)\s*units?", text, re.IGNORECASE
+            )
         if not m_inv:
             return None
 
@@ -843,7 +937,9 @@ class PVsystParser:
         # If PVsyst doesn't provide explicit per-inverter stringing, prefer the
         # minimum inverter count that can host the total strings within MPPT limits.
         strings_per_inverter_max = max(1, mppt_per_inv * strings_per_mppt_max)
-        inverter_units_required = (strings + strings_per_inverter_max - 1) // strings_per_inverter_max
+        inverter_units_required = (
+            strings + strings_per_inverter_max - 1
+        ) // strings_per_inverter_max
 
         inverter_units_used = inverter_units_reported
         if inverter_units_reported > inverter_units_required:
@@ -871,7 +967,9 @@ class PVsystParser:
         }
 
         # Tilt/Azimuth if present
-        m_tilt_az = re.search(r"Tilt/Azimuth\s*([-\d.]+)\s*/\s*([-\d.]+)\s*°", text, re.IGNORECASE)
+        m_tilt_az = re.search(
+            r"Tilt/Azimuth\s*([-\d.]+)\s*/\s*([-\d.]+)\s*°", text, re.IGNORECASE
+        )
         if m_tilt_az:
             tilt = float(m_tilt_az.group(1))
             az_pv = float(m_tilt_az.group(2))
@@ -891,11 +989,15 @@ class PVsystParser:
 
         unit_wp = self.module_info.get("unit_nom_power_w")
         if isinstance(unit_wp, int):
-            array_data["nominal_stc_kwp_from_module"] = round(unit_wp * number_of_modules / 1000.0, 3)
+            array_data["nominal_stc_kwp_from_module"] = round(
+                unit_wp * number_of_modules / 1000.0, 3
+            )
 
         return array_data
 
-    def parse_arrays_from_text(self, blocks: Dict[int, Dict[str, Any]], interactive: bool = False) -> Dict[str, Dict[str, Any]]:
+    def parse_arrays_from_text(
+        self, blocks: Dict[int, Dict[str, Any]], interactive: bool = False
+    ) -> Dict[str, Dict[str, Any]]:
         print("  Parsing array data (generic)...")
 
         pages_with_arrays: List[int] = []
@@ -918,7 +1020,9 @@ class PVsystParser:
         start_page = pages_with_arrays[0]
         end_page = pages_with_arrays[-1]
 
-        combined_text = "\n".join(blocks[p].get("full_text") or "" for p in range(start_page, end_page + 1))
+        combined_text = "\n".join(
+            blocks[p].get("full_text") or "" for p in range(start_page, end_page + 1)
+        )
 
         array_pattern = re.compile(
             r"(Array\s*#?\s*(\d+).*?)(?=Array\s*#?\s*\d+|AC wiring losses|Page \d+/\d+|$)",
@@ -936,11 +1040,15 @@ class PVsystParser:
             if array_id in seen_ids:
                 continue
 
-            if not re.search(r"Modules\s+\d+\s+(?:string|Strings)", block_text, re.IGNORECASE):
+            if not re.search(
+                r"Modules\s+\d+\s+(?:string|Strings)", block_text, re.IGNORECASE
+            ):
                 continue
 
             trailing_equipment = None
-            m_eq = re.search(r"\nPV\s*module\b.*", block_text, flags=re.IGNORECASE | re.DOTALL)
+            m_eq = re.search(
+                r"\nPV\s*module\b.*", block_text, flags=re.IGNORECASE | re.DOTALL
+            )
             if m_eq:
                 trailing_equipment = block_text[m_eq.start() :]
                 block_text = block_text[: m_eq.start()].rstrip()
@@ -948,7 +1056,9 @@ class PVsystParser:
             array_data = self._parse_array_block(block_text, array_id)
 
             if pending_inverter_type and array_data.get("inverter_id"):
-                if not array_data.get("inverter_model") and not array_data.get("inverter_manufacturer"):
+                if not array_data.get("inverter_model") and not array_data.get(
+                    "inverter_manufacturer"
+                ):
                     array_data.update(pending_inverter_type)
 
             if interactive:
@@ -1058,7 +1168,9 @@ class PVsystParser:
             sections[current_section] = current_lines
 
         if "array_losses" in sections:
-            parsed["dc_wiring_losses"] = self._parse_dc_wiring_losses(sections["array_losses"])
+            parsed["dc_wiring_losses"] = self._parse_dc_wiring_losses(
+                sections["array_losses"]
+            )
 
         for sec, sec_lines in sections.items():
             if sec == "soiling_losses":
@@ -1066,7 +1178,9 @@ class PVsystParser:
             elif sec == "thermal_losses":
                 parsed["thermal_losses"] = self._parse_thermal_losses(sec_lines)
             elif sec == "module_mismatch_losses":
-                parsed["module_mismatch_losses"] = self._parse_mismatch_losses(sec_lines)
+                parsed["module_mismatch_losses"] = self._parse_mismatch_losses(
+                    sec_lines
+                )
             elif sec == "iam_losses":
                 parsed["iam_losses"] = self._parse_iam_losses(sec_lines)
             elif sec == "ac_wiring_losses":
@@ -1083,9 +1197,24 @@ class PVsystParser:
                     data["average_loss_fraction_percent"] = float(m.group(1))
             elif re.search(r"\d+\.\d+%", line):
                 parts = line.split()
-                months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+                months = [
+                    "Jan",
+                    "Feb",
+                    "Mar",
+                    "Apr",
+                    "May",
+                    "Jun",
+                    "Jul",
+                    "Aug",
+                    "Sep",
+                    "Oct",
+                    "Nov",
+                    "Dec",
+                ]
                 if len(parts) >= 12:
-                    data["monthly_percentages"] = {months[i]: float(parts[i].rstrip("%")) for i in range(12)}
+                    data["monthly_percentages"] = {
+                        months[i]: float(parts[i].rstrip("%")) for i in range(12)
+                    }
         return data
 
     def _parse_thermal_losses(self, lines: List[str]) -> Dict[str, Any]:
@@ -1126,7 +1255,9 @@ class PVsystParser:
                 m = re.search(r"Incidence effect \(IAM\):\s+(.+)", line)
                 if m:
                     data["incidence_effect"] = m.group(1).strip()
-            elif re.search(r"\d+\.\d+", line) and not any(c in line for c in ["°", "mΩ", "%"]):
+            elif re.search(r"\d+\.\d+", line) and not any(
+                c in line for c in ["°", "mΩ", "%"]
+            ):
                 parts = line.split()
                 if all(p.replace(".", "").replace("-", "").isdigit() for p in parts):
                     factors = [float(p) for p in parts]
@@ -1148,14 +1279,22 @@ class PVsystParser:
                 data["global_loss_fraction_percent"] = float(m.group(2))
 
         notations: List[Tuple[int, str]] = []
-        for match in re.finditer(r"Array #(\d+)\s*-\s*(.+?)(?=Array #|\s*Global|$)", full_text):
+        for match in re.finditer(
+            r"Array #(\d+)\s*-\s*(.+?)(?=Array #|\s*Global|$)", full_text
+        ):
             notations.append((int(match.group(1)), match.group(2).strip()))
 
         res_list = re.findall(r"Global array res\.\s*([\d.]+)mΩ", full_text)
         loss_list = re.findall(r"Loss Fraction\s+([\d.]+)%", full_text)
 
-        if notations and len(res_list) >= len(notations) and len(loss_list) >= len(notations):
-            for (array_id, notation), res, loss in zip(notations, res_list[: len(notations)], loss_list[: len(notations)]):
+        if (
+            notations
+            and len(res_list) >= len(notations)
+            and len(loss_list) >= len(notations)
+        ):
+            for (array_id, notation), res, loss in zip(
+                notations, res_list[: len(notations)], loss_list[: len(notations)]
+            ):
                 data["arrays"].append(
                     {
                         "array_id": array_id,
@@ -1198,7 +1337,9 @@ class PVsystParser:
                 for item in value:
                     if isinstance(item, dict):
                         for sub_key, sub_value in item.items():
-                            f.write(f"  {sub_key.replace('_', ' ').title()}: {sub_value}\n")
+                            f.write(
+                                f"  {sub_key.replace('_', ' ').title()}: {sub_value}\n"
+                            )
                         f.write("\n")
                     else:
                         f.write(f"  {item}\n")
@@ -1264,7 +1405,9 @@ class PVsystParser:
     def _inverter_display_name(self, inverter_id: str) -> str:
         """Format inverter display name as: Inv [n] - ([kW] kW) - [mfr] [model]."""
         type_by_id: Dict[str, Dict[str, Any]] = {
-            str(t.get("id")): t for t in self.inverter_types if isinstance(t, dict) and t.get("id")
+            str(t.get("id")): t
+            for t in self.inverter_types
+            if isinstance(t, dict) and t.get("id")
         }
 
         inverter_type_id: Optional[str] = None
@@ -1291,7 +1434,9 @@ class PVsystParser:
 
         manufacturer = manufacturer or self.inverter_info.get("manufacturer")
         model = model or self.inverter_info.get("model")
-        unit_nom_power_kw = unit_nom_power_kw or self.inverter_info.get("unit_nom_power_kw")
+        unit_nom_power_kw = unit_nom_power_kw or self.inverter_info.get(
+            "unit_nom_power_kw"
+        )
 
         if manufacturer is None and model is None and unit_nom_power_kw is None:
             return inverter_id
@@ -1307,7 +1452,9 @@ class PVsystParser:
 
         return f"{label} - ({kw_str} kW) - {manu_model}"
 
-    def extract_monthly_production(self, blocks: Dict[int, Dict[str, Any]]) -> Dict[str, float]:
+    def extract_monthly_production(
+        self, blocks: Dict[int, Dict[str, Any]]
+    ) -> Dict[str, float]:
         print("  Extracting monthly production data...")
 
         self.system_monthly_globhor = {}
@@ -1352,20 +1499,26 @@ class PVsystParser:
             monthly_data[month] = e_grid
 
         total_annual = sum(monthly_data.values())
-        print(f"    Found {len(monthly_data)} months, total annual: {total_annual:,.0f} kWh")
+        print(
+            f"    Found {len(monthly_data)} months, total annual: {total_annual:,.0f} kWh"
+        )
 
         self.system_monthly_production = monthly_data
         return monthly_data
 
     def extract_total_modules(self, blocks: Dict[int, Dict[str, Any]]) -> int:
-        all_text = "\n".join(blocks[p].get("full_text") or "" for p in sorted(blocks.keys()))
+        all_text = "\n".join(
+            blocks[p].get("full_text") or "" for p in sorted(blocks.keys())
+        )
         match = re.search(r"Nb\.\s*of\s*modules\s*(\d+)units?", all_text)
         if match:
             return int(match.group(1))
 
         return sum(int(a.get("number_of_modules") or 0) for a in self.arrays.values())
 
-    def calculate_inverter_capacities_and_modules(self) -> Tuple[Dict[str, float], Dict[str, int]]:
+    def calculate_inverter_capacities_and_modules(
+        self,
+    ) -> Tuple[Dict[str, float], Dict[str, int]]:
         by_inverter: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
         for combo in self.expanded_arrays:
             by_inverter[combo["inverter"]].append(combo)
@@ -1415,14 +1568,20 @@ class PVsystParser:
         print(f"    Calculated capacities for {len(inverter_capacities)} inverters")
         return inverter_capacities, inverter_modules
 
-    def calculate_monthly_production(self, blocks: Dict[int, Dict[str, Any]]) -> Dict[str, Dict[str, float]]:
+    def calculate_monthly_production(
+        self, blocks: Dict[int, Dict[str, Any]]
+    ) -> Dict[str, Dict[str, float]]:
         monthly_data = self.extract_monthly_production(blocks)
         total_system_modules = self.extract_total_modules(blocks)
-        inverter_capacities, inverter_modules = self.calculate_inverter_capacities_and_modules()
+        inverter_capacities, inverter_modules = (
+            self.calculate_inverter_capacities_and_modules()
+        )
         self.inverter_capacities = inverter_capacities
 
         if not inverter_modules:
-            print("    No inverter/module mapping found; leaving only system_monthly_production")
+            print(
+                "    No inverter/module mapping found; leaving only system_monthly_production"
+            )
             self.monthly_production = {}
             return {}
 
@@ -1462,7 +1621,9 @@ class PVsystParser:
                     cap = float(self.inverter_capacities.get(inverter, 0.0) or 0.0)
                     annual = sum(self.monthly_production[inverter].values())
                     spec = (annual / cap) if cap > 0 else 0.0
-                    f.write(f"{display_name}: {cap:.1f} kWp, {annual:,.0f} kWh/year ({spec:.0f} kWh/kWp)\n")
+                    f.write(
+                        f"{display_name}: {cap:.1f} kWp, {annual:,.0f} kWh/year ({spec:.0f} kWh/kWp)\n"
+                    )
                 f.write("\n")
 
             if self.array_losses:
@@ -1514,7 +1675,9 @@ class PVsystParser:
             mppt = combo.get("mppt")
             if mppt is None:
                 continue
-            combos_by_array[str(combo["array_id"])].append((combo["inverter"], str(mppt)))
+            combos_by_array[str(combo["array_id"])].append(
+                (combo["inverter"], str(mppt))
+            )
 
         for arr_id, pairs in combos_by_array.items():
             unique_endpoints = sorted(set(pairs))
@@ -1526,7 +1689,9 @@ class PVsystParser:
             strings = int(strings_val) if isinstance(strings_val, int) else 0
             series = int(series_val) if isinstance(series_val, int) else 0
 
-            stc_kwp = arr.get("nominal_stc_kwp_from_module") or arr.get("nominal_stc_kwp")
+            stc_kwp = arr.get("nominal_stc_kwp_from_module") or arr.get(
+                "nominal_stc_kwp"
+            )
             if not isinstance(stc_kwp, (int, float)):
                 stc_kwp = None
 
@@ -1536,8 +1701,12 @@ class PVsystParser:
             if arr.get("inferred_single_config"):
                 strings_per_mppt_max = arr.get("inferred_strings_per_mppt_max")
                 if isinstance(strings_per_mppt_max, int) and strings_per_mppt_max > 0:
-                    inv_ids = self._sort_inv_ids(sorted({inv for inv, _ in unique_endpoints}))
-                    mppt_ids = self._sort_mppt_ids(sorted({mppt for _, mppt in unique_endpoints}))
+                    inv_ids = self._sort_inv_ids(
+                        sorted({inv for inv, _ in unique_endpoints})
+                    )
+                    mppt_ids = self._sort_mppt_ids(
+                        sorted({mppt for _, mppt in unique_endpoints})
+                    )
 
                     strings_alloc = self._allocate_strings_single_config(
                         inv_ids,
@@ -1551,7 +1720,9 @@ class PVsystParser:
                         modules_here = strings_here * series
 
                         if stc_kwp and total_modules:
-                            dc_here = round(float(stc_kwp) * (modules_here / total_modules), 3)
+                            dc_here = round(
+                                float(stc_kwp) * (modules_here / total_modules), 3
+                            )
                         else:
                             dc_here = None
 
@@ -1645,7 +1816,11 @@ class PVsystParser:
                 i_mpp_total = arr.get("i_mpp_a")
 
                 i_mpp_mppt = i_mpp_total
-                if isinstance(i_mpp_total, (int, float)) and isinstance(strings_total, int) and strings_total > 0:
+                if (
+                    isinstance(i_mpp_total, (int, float))
+                    and isinstance(strings_total, int)
+                    and strings_total > 0
+                ):
                     i_mpp_per_string = i_mpp_total / strings_total
                     if isinstance(strings_on_mppt, int) and strings_on_mppt > 0:
                         i_mpp_mppt = round(i_mpp_per_string * strings_on_mppt, 3)
@@ -1675,7 +1850,9 @@ class PVsystParser:
                 "inverter_type": inv_type,
                 "capacity_kwp": cap,
                 "annual_production_kwh": annual,
-                "specific_production_kwh_per_kwp": round(annual / cap, 0) if cap > 0 else 0,
+                "specific_production_kwh_per_kwp": round(annual / cap, 0)
+                if cap > 0
+                else 0,
                 "monthly_production": monthly,
                 "associations": raw_associations[inv_id],
                 "combined_configuration": combined,
@@ -1683,8 +1860,14 @@ class PVsystParser:
 
         self.inverter_summary = inverter_summary
 
-        total_capacity_kwp = sum(self.inverter_capacities.values()) if self.inverter_capacities else 0.0
-        total_annual_kwh = sum(self.system_monthly_production.values()) if self.system_monthly_production else 0.0
+        total_capacity_kwp = (
+            sum(self.inverter_capacities.values()) if self.inverter_capacities else 0.0
+        )
+        total_annual_kwh = (
+            sum(self.system_monthly_production.values())
+            if self.system_monthly_production
+            else 0.0
+        )
 
         return {
             "metadata": {
@@ -1717,10 +1900,209 @@ class PVsystParser:
         return self._build_output_data()
 
     # -------------------------------------------------------------------------
+    # PowerTrack patch output
+    # -------------------------------------------------------------------------
+
+    @staticmethod
+    def _to_int_or_none(v: Any) -> Optional[int]:
+        if v is None:
+            return None
+        if isinstance(v, bool):
+            return int(v)
+        if isinstance(v, int):
+            return v
+        if isinstance(v, float):
+            return int(round(v))
+        s = str(v).strip()
+        if not s:
+            return None
+        try:
+            return int(round(float(s)))
+        except ValueError:
+            return None
+
+    @staticmethod
+    def _to_float_or_none(v: Any) -> Optional[float]:
+        if v is None:
+            return None
+        if isinstance(v, bool):
+            return float(int(v))
+        if isinstance(v, (int, float)):
+            return float(v)
+        s = str(v).strip()
+        if not s:
+            return None
+        try:
+            return float(s)
+        except ValueError:
+            return None
+
+    @staticmethod
+    def _omit_none(d: Dict[str, Any]) -> Dict[str, Any]:
+        return {k: v for k, v in d.items() if v is not None}
+
+    @staticmethod
+    def _month_full_to_powertrack_abbrev(monthly: Dict[str, Any]) -> Dict[str, int]:
+        month_map = {
+            "January": "jan",
+            "February": "feb",
+            "March": "mar",
+            "April": "apr",
+            "May": "may",
+            "June": "jun",
+            "July": "jul",
+            "August": "aug",
+            "September": "sep",
+            "October": "oct",
+            "November": "nov",
+            "December": "dec",
+        }
+
+        out: Dict[str, int] = {abbr: 0 for abbr in month_map.values()}
+        if not isinstance(monthly, dict):
+            return out
+
+        for full_name, abbr in month_map.items():
+            f = PVsystParser._to_float_or_none(monthly.get(full_name))
+            out[abbr] = int(round(f)) if f is not None else 0
+        return out
+
+    @staticmethod
+    def _mppt_sort_key(row: Dict[str, Any]) -> Tuple[int, str]:
+        mppt = str(row.get("mppt") or "")
+        m = re.search(r"(\d+)", mppt)
+        if m:
+            return (int(m.group(1)), mppt)
+        return (10**9, mppt)
+
+    @staticmethod
+    def _inv_id_to_powertrack_key(inv_id: str, *, used: set[int]) -> str:
+        idx: Optional[int] = None
+        m = re.search(r"(\d+)", str(inv_id))
+        if m:
+            try:
+                parsed = int(m.group(1)) - 1
+                if parsed >= 0:
+                    idx = parsed
+            except ValueError:
+                idx = None
+
+        if idx is None or idx in used:
+            candidate = 0
+            while candidate in used:
+                candidate += 1
+            idx = candidate
+
+        used.add(idx)
+        return f"PV{idx}"
+
+    def to_powertrack_patches_by_inverter(
+        self,
+        *,
+        omit_nulls: bool = True,
+        include_optional_mpp: bool = True,
+    ) -> Dict[str, Any]:
+        patches: Dict[str, Any] = {}
+
+        watts_per_panel = self._to_int_or_none(self.module_info.get("unit_nom_power_w"))
+        inv_kw = self._to_float_or_none(self.inverter_info.get("unit_nom_power_kw"))
+
+        degrade = None
+        if isinstance(self.array_losses, dict):
+            thermal = self.array_losses.get("thermal_losses")
+            if isinstance(thermal, dict):
+                degrade = self._to_float_or_none(thermal.get("loss_fraction_percent"))
+
+        used: set[int] = set()
+        inv_ids = self._sort_inv_ids(
+            [str(k) for k in (self.inverter_summary or {}).keys()]
+        )
+        for inv_id in inv_ids:
+            inv_summary = (self.inverter_summary or {}).get(inv_id)
+            if not isinstance(inv_summary, dict):
+                continue
+
+            pv_key = self._inv_id_to_powertrack_key(inv_id, used=used)
+
+            description = inv_summary.get("description")
+
+            monthly = inv_summary.get("monthly_production")
+            monthly_out = (
+                self._month_full_to_powertrack_abbrev(monthly)
+                if isinstance(monthly, dict)
+                else None
+            )
+
+            inv_type_kw = None
+            inv_type = inv_summary.get("inverter_type")
+            if isinstance(inv_type, dict):
+                inv_type_kw = self._to_float_or_none(inv_type.get("unit_nom_power_kw"))
+            inverter_kw = inv_kw if inv_kw is not None else inv_type_kw
+
+            rows = inv_summary.get("combined_configuration") or []
+            if not isinstance(rows, list):
+                rows = []
+
+            mppt_entries: List[Dict[str, Any]] = []
+            for row in sorted(
+                [r for r in rows if isinstance(r, dict)], key=self._mppt_sort_key
+            ):
+                v_mpp = self._to_float_or_none(row.get("u_mpp_v"))
+                a_mpp = self._to_float_or_none(row.get("i_mpp_a"))
+                mpp_watts = (
+                    (v_mpp * a_mpp)
+                    if (v_mpp is not None and a_mpp is not None)
+                    else None
+                )
+
+                entry: Dict[str, Any] = {
+                    "numOfStrings": self._to_int_or_none(row.get("strings")),
+                    "panelsPerString": self._to_int_or_none(
+                        row.get("modules_in_series")
+                    ),
+                    "wattsPerPanel": watts_per_panel,
+                    "inverterKw": inverter_kw,
+                    "azimuth": self._to_float_or_none(row.get("azimuth")),
+                    "tilt": self._to_float_or_none(row.get("tilt")),
+                    "dcSize": self._to_float_or_none(row.get("dc_kwp")),
+                }
+
+                if include_optional_mpp:
+                    entry["mppVoltage"] = v_mpp
+                    entry["mppAmps"] = a_mpp
+                    entry["mppWatts"] = self._to_float_or_none(mpp_watts)
+
+                if omit_nulls:
+                    entry = self._omit_none(entry)
+
+                if entry:
+                    mppt_entries.append(entry)
+
+            pv_config: Dict[str, Any] = {"inverters": mppt_entries}
+            if monthly_out is not None:
+                pv_config["monthlyOutput"] = monthly_out
+            if degrade is not None:
+                pv_config["degrade"] = degrade
+
+            patch: Dict[str, Any] = {"description": description, "pvConfig": pv_config}
+            if omit_nulls:
+                patch = self._omit_none(patch)
+
+            patches[pv_key] = patch
+
+        return patches
+
+    # -------------------------------------------------------------------------
     # Top-level parse
     # -------------------------------------------------------------------------
 
-    def parse_pdf(self, pdf_path: str, output_dir: Optional[str] = None, *, interactive: bool = False) -> Dict[str, Any]:
+    def parse_pdf(
+        self,
+        pdf_path: str,
+        output_dir: Optional[str] = None,
+        *,
+        interactive: bool = False,
+    ) -> Dict[str, Any]:
         if output_dir is None:
             output_dir = str(Path(pdf_path).parent)
 
@@ -1742,9 +2124,14 @@ class PVsystParser:
         self.orientations = self.extract_orientations(blocks)
 
         # Array losses (if present)
-        if "Array Losses" in self.section_contents and self.section_contents["Array Losses"]:
+        if (
+            "Array Losses" in self.section_contents
+            and self.section_contents["Array Losses"]
+        ):
             try:
-                self.array_losses = self.parse_array_losses_section(self.section_contents["Array Losses"][0])
+                self.array_losses = self.parse_array_losses_section(
+                    self.section_contents["Array Losses"][0]
+                )
             except Exception as exc:  # noqa: BLE001
                 print(f"  Warning: failed to parse array losses: {exc}")
 
@@ -1774,8 +2161,24 @@ class PVsystParser:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Parse PVsyst PDF reports (V3)")
     parser.add_argument("pdf_file", help="Path to PVsyst PDF")
-    parser.add_argument("--output-dir", default=None, help="Output directory (default: PDF directory)")
-    parser.add_argument("--interactive", action="store_true", help="Prompt to override array inverter/MPPT parsing")
+    parser.add_argument(
+        "--output-dir", default=None, help="Output directory (default: PDF directory)"
+    )
+    parser.add_argument(
+        "--interactive",
+        action="store_true",
+        help="Prompt to override array inverter/MPPT parsing",
+    )
+    parser.add_argument(
+        "--powertrack-patch",
+        action="store_true",
+        help="Write PowerTrack patch JSON per inverter (keys PV0, PV1, ...)",
+    )
+    parser.add_argument(
+        "--powertrack-patch-path",
+        default=None,
+        help="Output path for PowerTrack patch JSON (default: <output-dir>/<pdf>_powertrack_patch.json)",
+    )
     args = parser.parse_args()
 
     pdf_path = args.pdf_file
@@ -1785,6 +2188,20 @@ def main() -> None:
 
     p = PVsystParser()
     p.parse_pdf(pdf_path, args.output_dir, interactive=args.interactive)
+
+    if args.powertrack_patch:
+        out_dir = Path(args.output_dir) if args.output_dir else Path(pdf_path).parent
+        out_dir.mkdir(exist_ok=True)
+        pdf_name = Path(pdf_path).stem
+        patch_path = (
+            Path(args.powertrack_patch_path)
+            if args.powertrack_patch_path
+            else (out_dir / f"{pdf_name}_powertrack_patch.json")
+        )
+        patches = p.to_powertrack_patches_by_inverter(omit_nulls=True)
+        with open(patch_path, "w", encoding="utf-8") as f:
+            json.dump(patches, f, indent=2, ensure_ascii=False)
+        print(f"  PowerTrack patch JSON: {patch_path}")
 
 
 if __name__ == "__main__":
