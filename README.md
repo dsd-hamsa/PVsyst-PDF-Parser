@@ -21,10 +21,10 @@ A comprehensive parser for PVsyst PDF reports that extracts structured data incl
 ### Install Dependencies
 
 ```bash
-pip install camelot-py[cv] pdfplumber fastapi uvicorn
+pip install -r requirements.txt
 ```
 
-**Note**: `camelot-py[cv]` includes OpenCV for better table detection. On some systems, you may need additional dependencies:
+**Note**: if you use Camelot table extraction, you may need system dependencies:
 
 ```bash
 # Ubuntu/Debian
@@ -41,7 +41,7 @@ brew install ghostscript tcl-tk
 Parse a PVsyst PDF and generate reports:
 
 ```bash
-python pvsyst_parser.py "path/to/your/pvsyst_report.pdf"
+python3 pvsyst_parser.py "path/to/your/pvsyst_report.pdf"
 ```
 
 Generate an additional PowerTrack patch JSON (per inverter):
@@ -55,7 +55,7 @@ This writes `<pdf_stem>_powertrack_patch.json` alongside the normal outputs. The
 Optional: specify output directory:
 
 ```bash
-python pvsyst_parser.py "report.pdf" "/path/to/output/dir"
+python3 pvsyst_parser.py "report.pdf" "/path/to/output/dir"
 ```
 
 Optional: specify PowerTrack patch output path:
@@ -73,10 +73,14 @@ This will generate:
 Start the web server:
 
 ```bash
-uvicorn app:app --reload
+uvicorn app:app --reload --port 8000
 ```
 
-Open your browser to `http://localhost:8000` and upload a PVsyst PDF through the web interface.
+Then open `index.html` in your browser. By default it calls `http://localhost:8000/api`.
+
+Tip: you can override the backend URL with a query param, for example:
+
+`index.html?apiBase=http://localhost:8000` (or `.../api`)
 
 ### API Usage
 

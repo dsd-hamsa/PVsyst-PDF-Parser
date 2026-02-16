@@ -1,16 +1,38 @@
 parser5.1.py
-.devcontainer/
-*.pdf
-.venv
-__pycache__
-*.txt
-*.json
-*.pdf
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.mypy_cache/
+.ruff_cache/
+
+# App/editor tooling
+.opencode/
+
+# Generated outputs / bulk data
+out/
+--output/
 AEPs/
-*.csv
-*Zone.Identifier
+AEPjsons/
 badparse/
-./pvsyst-extractor/
 backup/
+
+# Common report artifacts
+*.pdf
+*.json
+*.csv
+*.txt
+*Zone.Identifier
+
+# Allow a small set of debug inputs to be visible to agents/tools.
+# Put sample PDFs/JSONs here when you want OpenCode to be able to read them.
+!debug_inputs/
+!debug_inputs/**/*.pdf
+!debug_inputs/**/*.json
+!debug_inputs/**/*.txt
+
+# Optional local tools (not part of the core runnable repo)
+pvsyst-extractor/
 ocr_extractor.py
-.gitignore
+pvsyst_pipeline.py

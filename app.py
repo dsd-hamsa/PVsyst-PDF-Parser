@@ -1,7 +1,7 @@
 """API for parsing PVsyst PDF files (V3).
 
-This version is compatible with `pvsyst_parser_v3.py` and returns the V3 JSON
-structure without writing output files to disk.
+This API is a thin wrapper around `pvsyst_parser.py`.
+It returns the V3 JSON structure without writing output files to disk.
 """
 
 import tempfile
@@ -11,7 +11,7 @@ from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from pvsyst_parser_v3 import PVsystParser
+from pvsyst_parser import PVsystParser
 
 app = FastAPI(title="PVsyst Parser API (V3)")
 
@@ -48,12 +48,17 @@ async def parse_pvsyst_pdf(file: UploadFile = File(...)):
         blocks = parser.extract_text_blocks(tmp_path)
 
         parser.sections = parser.identify_sections(blocks)
-        parser.section_contents = parser.extract_section_contents(blocks, parser.sections)
+        parser.section_contents = parser.extract_section_contents(
+            blocks, parser.sections
+        )
 
         parser.extract_equipment_info(blocks)
         parser.orientations = parser.extract_orientations(blocks)
 
-        if "Array Losses" in parser.section_contents and parser.section_contents["Array Losses"]:
+        if (
+            "Array Losses" in parser.section_contents
+            and parser.section_contents["Array Losses"]
+        ):
             try:
                 parser.array_losses = parser.parse_array_losses_section(
                     parser.section_contents["Array Losses"][0]
