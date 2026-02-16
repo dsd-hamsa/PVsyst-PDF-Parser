@@ -184,10 +184,40 @@
   </main>
 
   <script>
-    // Change this if you deploy the API elsewhere
-    const API_BASE = location.origin.includes("github.io")
-      ? "https://YOUR-BACKEND-HOST/api"  // <-- set this for GitHub Pages
-      : "http://localhost:8888/api";
+    // API base resolution
+    // - If served by the FastAPI app (same origin), this will use `${origin}/api`.
+    // - If you open `index.html` from disk (file://), it falls back to localhost.
+    // - You can override with `?apiBase=http://host:port/api` or `?apiBase=http://host:port`.
+    const DEFAULT_API_BASE = "http://localhost:8000/api";
+
+    function normalizeApiBase(value) {
+      if (!value) return "";
+      let v = String(value).trim();
+      if (!v) return "";
+      if (v.endsWith("/")) v = v.slice(0, -1);
+      if (!v.endsWith("/api")) v = v + "/api";
+      return v;
+    }
+
+    const API_BASE = (() => {
+      const qs = new URLSearchParams(location.search);
+      const override = qs.get("apiBase") || qs.get("api") || "";
+      const normalizedOverride = normalizeApiBase(override);
+      if (normalizedOverride) return normalizedOverride;
+
+      // GitHub Pages needs an external backend.
+      if (location.origin && location.origin.includes("github.io")) {
+        return "https://YOUR-BACKEND-HOST/api"; // set this for GitHub Pages
+      }
+
+      // If we are served over http(s), prefer same-origin.
+      if (location.protocol === "http:" || location.protocol === "https:") {
+        return location.origin + "/api";
+      }
+
+      // file:// (or other) fallback
+      return DEFAULT_API_BASE;
+    })();
 
     document.getElementById("apiUrlLabel").textContent = API_BASE + "/parse";
 

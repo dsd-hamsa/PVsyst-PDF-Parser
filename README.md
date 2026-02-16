@@ -33,31 +33,37 @@ V3 is implemented in `pvsyst_parser.py`.
 ### Dependencies
 
 ```bash
-pip install pdfplumber fastapi uvicorn
+pip install -r requirements.txt
 ```
 
-**Note**: V3 uses text-only parsing with pdfplumber for faster, more reliable extraction. No table extraction dependencies required.
+**Note**: V3 uses text-only parsing with `pdfplumber` for faster, more reliable extraction.
 
 ## CLI Usage
 
 Parse a PVsyst PDF and write outputs (text + JSON) into an output directory:
 
 ```bash
-python pvsyst_parser.py "path/to/report.pdf" --output-dir "./out"
+python3 pvsyst_parser.py "path/to/report.pdf" --output-dir "./out"
 ```
 
 Outputs:
 - `*_analysis_v3.txt`
 - `*_structured_v3.json`
 
+Optional: generate an additional PowerTrack patch JSON (per inverter):
+
+```bash
+python3 pvsyst_parser.py "path/to/report.pdf" --powertrack-patch
+```
+
 ## API Usage
 
 V3 API entry point is `app.py`.
 
-Run on port **8888**:
+Run on port **8000**:
 
 ```bash
-uvicorn app:app --reload --host 0.0.0.0 --port 8888
+uvicorn app:app --reload --host 0.0.0.0 --port 8000
 ```
 
 Endpoints:
@@ -67,7 +73,7 @@ Endpoints:
 Example:
 
 ```bash
-curl -X POST "http://localhost:8888/api/parse" \
+curl -X POST "http://localhost:8000/api/parse" \
   -H "accept: application/json" \
   -H "Content-Type: multipart/form-data" \
   -F "file=@your_pvsyst_report.pdf"
@@ -78,12 +84,17 @@ Notes:
 
 ## Web UI Usage
 
-Open `index.html` in a browser.
+Start the API server (see above), then open `index.html` in a browser.
 
-By default it calls:
-- `http://localhost:8888/api/parse`
+When opened from disk (file://), the UI defaults to `http://localhost:8000/api`.
 
-If deploying elsewhere, update `API_BASE` in `index.html`.
+Tip: you can override the backend URL with a query param, for example:
+
+`index.html?apiBase=http://localhost:8000` (or `.../api`)
+
+```bash
+uvicorn app:app --reload --port 8000
+```
 
 **V3 Interface:** Modern UI that displays combined MPPT configurations and detects all inverter types.
 

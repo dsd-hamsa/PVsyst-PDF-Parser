@@ -1,0 +1,45 @@
+# PVsyst PDF Parser - Agent Notes
+
+## Repo Intent
+
+- This is a runnable tool repo (CLI + FastAPI API + a static HTML UI).
+- Source of truth for versions is git tags on `main` (not a Python package version).
+
+## Primary Entrypoints
+
+- CLI parser: `pvsyst_parser.py`
+- API server: `app.py` (imports `PVsystParser` from `pvsyst_parser.py`)
+- UI: `index.html` (calls the API)
+- Library helper (no outputs): `pvsyst_parse_to_dict.py`
+
+## Local Dev Quickstart
+
+- Install deps: `pip install -r requirements.txt`
+- Run API: `uvicorn app:app --reload --port 8000`
+- Open UI:
+  - Open `index.html` in a browser (defaults to `http://localhost:8000/api`)
+  - Optional override: `index.html?apiBase=http://localhost:8000` (or `.../api`)
+
+## Versioning / Releases (SemVer)
+
+- Use SemVer tags on `main`: `v3.0.0`, `v3.1.0`, `v3.0.1`, ...
+- Treat `v3.0.0` as the baseline for the V3 schema/API.
+- Bump rules:
+  - Bugfix-only: patch (x.y.Z)
+  - Additive features: minor (x.Y.z)
+  - Breaking output schema / CLI/API contract: major (X.y.z)
+
+## Release Checklist
+
+- Ensure `main` is consistent and runnable:
+  - `app.py` imports the real parser module
+  - `README.md` and `index.html` agree on how to reach the API
+- Do a smoke check (minimum): `python3 -m py_compile app.py pvsyst_parser.py pvsyst_parse_to_dict.py`
+- Tag the release commit (annotated tag):
+  - `git tag -a vX.Y.Z -m "Release vX.Y.Z"`
+  - `git push origin main --tags`
+
+## Repo Hygiene
+
+- Do not commit PDFs or generated outputs (keep the repo lightweight).
+- Prefer keeping auxiliary scripts under a dedicated folder (e.g. `tools/`) to avoid root clutter.

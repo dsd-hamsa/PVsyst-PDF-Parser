@@ -575,18 +575,34 @@ class PVsystParser:
 
         inverter_ids: List[str] = []
 
-        # Prefer INV ... MPPT header notation (better for complex ranges)
-        m_inv_mppt = re.search(r"INV\s+(.+?)\s+MPPT", header_line, re.IGNORECASE)
+        # Prefer INV ... MPPT header notation (better for complex ranges).
+        # PVsyst headers vary; some use `INV1-3` (no space) and `MPPT#1-2`.
+        m_inv_mppt = re.search(
+            r"\bINV\s*([A-Za-z0-9,\-\s]+?)\s+MPPT", header_line, re.IGNORECASE
+        )
         if m_inv_mppt:
             inv_spec = m_inv_mppt.group(1).strip()
-            inverter_ids = self.parse_inverter_range(f"INV {inv_spec}")
+            inverter_ids = self.parse_inverter_range(inv_spec)
 
-        # Fallback: find INV specification in the header
+        # Fallback: capture inverter spec up to MPPT or end-of-line
         if not inverter_ids:
-            m_inv_spec = re.search(r"INV\s*(.+?)(?:\s+|$)", header_line, re.IGNORECASE)
+            m_inv_spec = re.search(
+                r"\bINV\s*([A-Za-z0-9,\-\s]+?)(?=\s+MPPT|\s*$)",
+                header_line,
+                re.IGNORECASE,
+            )
             if m_inv_spec:
-                inv_spec = m_inv_spec.group(1).strip()
-                inverter_ids = self.parse_inverter_range(f"INV {inv_spec}")
+                inverter_ids = self.parse_inverter_range(m_inv_spec.group(1).strip())
+
+        # Final fallback: find first INV token in the header
+        if not inverter_ids:
+            m_inv_simple = re.search(
+                r"\bINV\s*([A-Za-z]*)(\d+)", header_line, re.IGNORECASE
+            )
+            if m_inv_simple:
+                prefix = m_inv_simple.group(1)
+                num = int(m_inv_simple.group(2))
+                inverter_ids = [f"INV{prefix}{num:02d}"]
 
         if inverter_ids:
             array_data["inverter_ids"] = inverter_ids
@@ -1948,6 +1964,199 @@ class PVsystParser:
         return self._build_output_data()
 
     # -------------------------------------------------------------------------
+    # PowerTrack patch output
+    # -------------------------------------------------------------------------
+
+    @staticmethod
+    def _to_int_or_none(v: Any) -> Optional[int]:
+        if v is None:
+            return None
+        if isinstance(v, bool):
+            return int(v)
+        if isinstance(v, int):
+            return v
+        if isinstance(v, float):
+            return int(round(v))
+        s = str(v).strip()
+        if not s:
+            return None
+        try:
+            return int(round(float(s)))
+        except ValueError:
+            return None
+
+    @staticmethod
+    def _to_float_or_none(v: Any) -> Optional[float]:
+        if v is None:
+            return None
+        if isinstance(v, bool):
+            return float(int(v))
+        if isinstance(v, (int, float)):
+            return float(v)
+        s = str(v).strip()
+        if not s:
+            return None
+        try:
+            return float(s)
+        except ValueError:
+            return None
+
+    @staticmethod
+    def _omit_none(d: Dict[str, Any]) -> Dict[str, Any]:
+        return {k: v for k, v in d.items() if v is not None}
+
+    @staticmethod
+    def _month_full_to_powertrack_abbrev(monthly: Dict[str, Any]) -> Dict[str, int]:
+        month_map = {
+            "January": "jan",
+            "February": "feb",
+            "March": "mar",
+            "April": "apr",
+            "May": "may",
+            "June": "jun",
+            "July": "jul",
+            "August": "aug",
+            "September": "sep",
+            "October": "oct",
+            "November": "nov",
+            "December": "dec",
+        }
+
+        out: Dict[str, int] = {abbr: 0 for abbr in month_map.values()}
+        if not isinstance(monthly, dict):
+            return out
+
+        for full_name, abbr in month_map.items():
+            f = PVsystParser._to_float_or_none(monthly.get(full_name))
+            out[abbr] = int(round(f)) if f is not None else 0
+        return out
+
+    @staticmethod
+    def _mppt_sort_key(row: Dict[str, Any]) -> Tuple[int, str]:
+        mppt = str(row.get("mppt") or "")
+        m = re.search(r"(\d+)", mppt)
+        if m:
+            return (int(m.group(1)), mppt)
+        return (10**9, mppt)
+
+    @staticmethod
+    def _inv_id_to_powertrack_key(inv_id: str, *, used: set[int]) -> str:
+        idx: Optional[int] = None
+        m = re.search(r"(\d+)", str(inv_id))
+        if m:
+            try:
+                parsed = int(m.group(1)) - 1
+                if parsed >= 0:
+                    idx = parsed
+            except ValueError:
+                idx = None
+
+        if idx is None or idx in used:
+            candidate = 0
+            while candidate in used:
+                candidate += 1
+            idx = candidate
+
+        used.add(idx)
+        return f"PV{idx}"
+
+    def to_powertrack_patches_by_inverter(
+        self,
+        *,
+        omit_nulls: bool = True,
+        include_optional_mpp: bool = True,
+    ) -> Dict[str, Any]:
+        patches: Dict[str, Any] = {}
+
+        watts_per_panel = self._to_int_or_none(self.module_info.get("unit_nom_power_w"))
+        inv_kw = self._to_float_or_none(self.inverter_info.get("unit_nom_power_kw"))
+
+        degrade = None
+        if isinstance(self.array_losses, dict):
+            thermal = self.array_losses.get("thermal_losses")
+            if isinstance(thermal, dict):
+                degrade = self._to_float_or_none(thermal.get("loss_fraction_percent"))
+
+        used: set[int] = set()
+        inv_ids = self._sort_inv_ids(
+            [str(k) for k in (self.inverter_summary or {}).keys()]
+        )
+        for inv_id in inv_ids:
+            inv_summary = (self.inverter_summary or {}).get(inv_id)
+            if not isinstance(inv_summary, dict):
+                continue
+
+            pv_key = self._inv_id_to_powertrack_key(inv_id, used=used)
+
+            description = inv_summary.get("description")
+
+            monthly = inv_summary.get("monthly_production")
+            monthly_out = (
+                self._month_full_to_powertrack_abbrev(monthly)
+                if isinstance(monthly, dict)
+                else None
+            )
+
+            inv_type_kw = None
+            inv_type = inv_summary.get("inverter_type")
+            if isinstance(inv_type, dict):
+                inv_type_kw = self._to_float_or_none(inv_type.get("unit_nom_power_kw"))
+            inverter_kw = inv_kw if inv_kw is not None else inv_type_kw
+
+            rows = inv_summary.get("combined_configuration") or []
+            if not isinstance(rows, list):
+                rows = []
+
+            mppt_entries: List[Dict[str, Any]] = []
+            for row in sorted(
+                [r for r in rows if isinstance(r, dict)], key=self._mppt_sort_key
+            ):
+                v_mpp = self._to_float_or_none(row.get("u_mpp_v"))
+                a_mpp = self._to_float_or_none(row.get("i_mpp_a"))
+                mpp_watts = (
+                    (v_mpp * a_mpp)
+                    if (v_mpp is not None and a_mpp is not None)
+                    else None
+                )
+
+                entry: Dict[str, Any] = {
+                    "numOfStrings": self._to_int_or_none(row.get("strings")),
+                    "panelsPerString": self._to_int_or_none(
+                        row.get("modules_in_series")
+                    ),
+                    "wattsPerPanel": watts_per_panel,
+                    "inverterKw": inverter_kw,
+                    "azimuth": self._to_float_or_none(row.get("azimuth")),
+                    "tilt": self._to_float_or_none(row.get("tilt")),
+                    "dcSize": self._to_float_or_none(row.get("dc_kwp")),
+                }
+
+                if include_optional_mpp:
+                    entry["mppVoltage"] = v_mpp
+                    entry["mppAmps"] = a_mpp
+                    entry["mppWatts"] = self._to_float_or_none(mpp_watts)
+
+                if omit_nulls:
+                    entry = self._omit_none(entry)
+
+                if entry:
+                    mppt_entries.append(entry)
+
+            pv_config: Dict[str, Any] = {"inverters": mppt_entries}
+            if monthly_out is not None:
+                pv_config["monthlyOutput"] = monthly_out
+            if degrade is not None:
+                pv_config["degrade"] = degrade
+
+            patch: Dict[str, Any] = {"description": description, "pvConfig": pv_config}
+            if omit_nulls:
+                patch = self._omit_none(patch)
+
+            patches[pv_key] = patch
+
+        return patches
+
+    # -------------------------------------------------------------------------
     # Top-level parse
     # -------------------------------------------------------------------------
 
@@ -2027,6 +2236,16 @@ def main() -> None:
         action="store_true",
         help="Prompt to override array inverter/MPPT parsing",
     )
+    parser.add_argument(
+        "--powertrack-patch",
+        action="store_true",
+        help="Write PowerTrack patch JSON per inverter (keys PV0, PV1, ...)",
+    )
+    parser.add_argument(
+        "--powertrack-patch-path",
+        default=None,
+        help="Output path for PowerTrack patch JSON (default: <output-dir>/<pdf>_powertrack_patch.json)",
+    )
     args = parser.parse_args()
 
     pdf_path = args.pdf_file
@@ -2036,6 +2255,20 @@ def main() -> None:
 
     p = PVsystParser()
     p.parse_pdf(pdf_path, args.output_dir, interactive=args.interactive)
+
+    if args.powertrack_patch:
+        out_dir = Path(args.output_dir) if args.output_dir else Path(pdf_path).parent
+        out_dir.mkdir(exist_ok=True)
+        pdf_name = Path(pdf_path).stem
+        patch_path = (
+            Path(args.powertrack_patch_path)
+            if args.powertrack_patch_path
+            else (out_dir / f"{pdf_name}_powertrack_patch.json")
+        )
+        patches = p.to_powertrack_patches_by_inverter(omit_nulls=True)
+        with open(patch_path, "w", encoding="utf-8") as f:
+            json.dump(patches, f, indent=2, ensure_ascii=False)
+        print(f"  PowerTrack patch JSON: {patch_path}")
 
 
 if __name__ == "__main__":

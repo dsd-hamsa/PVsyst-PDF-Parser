@@ -1,24 +1,38 @@
-.devcontainer/
-.venv
-__pycache__
-*.txt
+parser5.1.py
 
-*.csv
-*Zone.Identifier
+# Python
+.venv/
+__pycache__/
+*.pyc
+.mypy_cache/
+.ruff_cache/
 
-# Large binaries / reports
+# App/editor tooling
+.opencode/
+
+# Generated outputs / bulk data
+out/
+--output/
+AEPs/
+AEPjsons/
+badparse/
+backup/
+
+# Common report artifacts
 *.pdf
 *.json
+*.csv
+*.txt
+*Zone.Identifier
 
-# Local tooling caches
-.ruff_cache
-.mypy_cache
+# Allow a small set of debug inputs to be visible to agents/tools.
+# Put sample PDFs/JSONs here when you want OpenCode to be able to read them.
+!debug_inputs/
+!debug_inputs/**/*.pdf
+!debug_inputs/**/*.json
+!debug_inputs/**/*.txt
 
-# Local scratch / backups
-AEPs/
-badparse/
-./pvsyst-extractor/
-backup/
---output
+# Optional local tools (not part of the core runnable repo)
+pvsyst-extractor/
 ocr_extractor.py
-.gitignore
+pvsyst_pipeline.py
