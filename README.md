@@ -56,6 +56,73 @@ Optional: generate an additional PowerTrack patch JSON (per inverter):
 python3 pvsyst_parser.py "path/to/report.pdf" --powertrack-patch
 ```
 
+You can override the output path:
+
+```bash
+python3 pvsyst_parser.py "path/to/report.pdf" --powertrack-patch \
+  --powertrack-patch-path "./out/site_powertrack_patch.json"
+```
+
+## PowerTrack Patch Output
+
+When `--powertrack-patch` is enabled, the parser writes a second JSON file whose top-level keys are `PV0`, `PV1`, ... (PowerTrack-style keys), with one patch object per inverter.
+
+### PowerTrack keys (PV0/PV1/...)
+
+- Default mapping: `INV01` -> `PV0`, `INV02` -> `PV1`, ... (derived from the numeric suffix minus 1).
+- If an inverter ID has no usable numeric suffix (or would collide), the next available `PV{n}` is assigned.
+- Inverters are processed in sorted order by raw inverter ID, so key assignment is deterministic for a given report.
+
+### Patch schema
+
+Each `PV{n}` entry looks like:
+
+```json
+{
+  "PV0": {
+    "description": "Inv 01 - (125.0 kW) - SMA Sunny Tripower CORE1",
+    "pvConfig": {
+      "inverters": [
+        {
+          "numOfStrings": 2,
+          "panelsPerString": 28,
+          "wattsPerPanel": 540,
+          "inverterKw": 125.0,
+          "azimuth": 180.0,
+          "tilt": 20.0,
+          "dcSize": 30.24,
+          "mppVoltage": 950.0,
+          "mppAmps": 26.2,
+          "mppWatts": 24890.0
+        }
+      ],
+      "monthlyOutput": {
+        "jan": 0,
+        "feb": 0,
+        "mar": 0,
+        "apr": 0,
+        "may": 0,
+        "jun": 0,
+        "jul": 0,
+        "aug": 0,
+        "sep": 0,
+        "oct": 0,
+        "nov": 0,
+        "dec": 0
+      },
+      "degrade": 0.5
+    }
+  }
+}
+```
+
+Notes:
+
+- `pvConfig.inverters[]` is MPPT-level (one entry per `inverter_summary[INVxx].combined_configuration` row).
+- `monthlyOutput` is annual energy split by month in kWh (rounded to integers) with keys `jan..dec`.
+- `degrade` comes from the PVsyst Array Losses thermal loss percent when available (units are percent, e.g. `0.5` means `0.5%`).
+- `mppVoltage`/`mppAmps`/`mppWatts` are included only when the underlying values are present (nulls are omitted).
+
 ## API Usage
 
 V3 API entry point is `app.py`.
