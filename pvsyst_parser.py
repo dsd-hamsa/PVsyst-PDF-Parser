@@ -2142,7 +2142,7 @@ class PVsystParser:
                 if entry:
                     mppt_entries.append(entry)
 
-            pv_config: Dict[str, Any] = {"inverters": mppt_entries}
+            pv_config: Dict[str, Any] = {"acDcType": 1, "inverters": mppt_entries}
             if monthly_out is not None:
                 pv_config["monthlyOutput"] = monthly_out
             if degrade is not None:
