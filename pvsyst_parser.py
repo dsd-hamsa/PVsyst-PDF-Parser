@@ -62,6 +62,7 @@ class PVsystParser:
     def __init__(self) -> None:
         self.sections: Dict[str, Any] = {}
         self.section_contents: Dict[str, List[str]] = {}
+        self.total_inverters_from_power_section: Optional[int] = None
 
         self.arrays: Dict[str, Dict[str, Any]] = {}
         self.expanded_arrays: List[Dict[str, Any]] = []
@@ -1935,7 +1936,7 @@ class PVsystParser:
 
         return {
             "metadata": {
-                "version": "v3",
+                "version": "v3.0.1",
                 "total_arrays": len(self.arrays),
                 "total_expanded_combinations": len(self.expanded_arrays),
                 "total_inverters": len(associations),

@@ -26,6 +26,7 @@ def _parse_pdf_no_outputs(pdf_path: str, *, interactive: bool = False) -> PVsyst
     blocks = parser.extract_text_blocks(str(p))
     parser.sections = parser.identify_sections(blocks)
     parser.section_contents = parser.extract_section_contents(blocks, parser.sections)
+    parser.total_inverters_from_power_section = parser._parse_total_inverter_power()
 
     parser.extract_equipment_info(blocks)
     parser.orientations = parser.extract_orientations(blocks)
