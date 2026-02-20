@@ -407,11 +407,11 @@ class PVsystParser:
         parts = [p.strip() for p in inv_text.split(",") if p.strip()]
 
         for part in parts:
-            if not part.upper().startswith("INV"):
+            if "INV" not in part.upper():
                 part = "INV " + part
 
             m_range = re.search(
-                r"INV\s*([A-Za-z]*)(\d+)\s*-\s*([A-Za-z]*)(\d+)",
+                r"(?:[A-Za-z0-9]+_)?INV\s*([A-Za-z]*)(\d+)\s*-\s*(?:(?:[A-Za-z0-9]+_)?INV\s*)?([A-Za-z]*)(\d+)",
                 part,
                 re.IGNORECASE,
             )
@@ -427,7 +427,9 @@ class PVsystParser:
                     inverters.append(f"INV{p1}{i:02d}")
                 continue
 
-            m_single = re.search(r"INV\s*([A-Za-z]*)(\d+)", part, re.IGNORECASE)
+            m_single = re.search(
+                r"(?:[A-Za-z0-9]+_)?INV\s*([A-Za-z]*)(\d+)", part, re.IGNORECASE
+            )
             if m_single:
                 prefix = m_single.group(1)
                 num = int(m_single.group(2))
@@ -579,7 +581,9 @@ class PVsystParser:
         # Prefer INV ... MPPT header notation (better for complex ranges).
         # PVsyst headers vary; some use `INV1-3` (no space) and `MPPT#1-2`.
         m_inv_mppt = re.search(
-            r"\bINV\s*([A-Za-z0-9,\-\s]+?)\s+MPPT", header_line, re.IGNORECASE
+            r"((?:[A-Za-z0-9]+_)?INV\s*[A-Za-z0-9,\-\s]+?)\s+MPPT",
+            header_line,
+            re.IGNORECASE,
         )
         if m_inv_mppt:
             inv_spec = m_inv_mppt.group(1).strip()
@@ -588,7 +592,7 @@ class PVsystParser:
         # Fallback: capture inverter spec up to MPPT or end-of-line
         if not inverter_ids:
             m_inv_spec = re.search(
-                r"\bINV\s*([A-Za-z0-9,\-\s]+?)(?=\s+MPPT|\s*$)",
+                r"((?:[A-Za-z0-9]+_)?INV\s*[A-Za-z0-9,\-\s]+?)(?=\s+MPPT|\s*$)",
                 header_line,
                 re.IGNORECASE,
             )
@@ -598,7 +602,9 @@ class PVsystParser:
         # Final fallback: find first INV token in the header
         if not inverter_ids:
             m_inv_simple = re.search(
-                r"\bINV\s*([A-Za-z]*)(\d+)", header_line, re.IGNORECASE
+                r"(?:[A-Za-z0-9]+_)?INV\s*([A-Za-z]*)(\d+)",
+                header_line,
+                re.IGNORECASE,
             )
             if m_inv_simple:
                 prefix = m_inv_simple.group(1)
@@ -1936,7 +1942,7 @@ class PVsystParser:
 
         return {
             "metadata": {
-                "version": "v3.0.1",
+                "version": "v3.0.2",
                 "total_arrays": len(self.arrays),
                 "total_expanded_combinations": len(self.expanded_arrays),
                 "total_inverters": len(associations),

@@ -1,6 +1,6 @@
-# PVsyst PDF Parser (V3.0.1)
+# PVsyst PDF Parser (V3.0.2)
 
-V3.0.1 is a fast, monitoring-oriented PVsyst report parser.
+V3.0.2 is a fast, monitoring-oriented PVsyst report parser.
 
 It is designed to produce a single JSON payload that contains:
 - Raw inverter IDs (`INV01`, `INV02`, …) as stable keys
