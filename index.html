@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>PVsyst PDF Parser (V3.0.2)</title>
+  <title>PVsyst PDF Parser (V3.0.3)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     :root {
@@ -147,7 +147,7 @@
 </head>
 <body>
   <main class="app">
-    <h1>📄 PVsyst PDF Parser (V3.0.2)</h1>
+    <h1>📄 PVsyst PDF Parser (V3.0.3)</h1>
     <p class="muted">
       Upload a PVsyst report PDF to extract inverter + MPPT configuration for monitoring.
     </p>
@@ -268,7 +268,7 @@
       resultsEl.style.display = "block";
 
       renderSummary(data);
-      renderModuleInfo(data.pv_module || {});
+      renderModuleInfo(data);
       renderInverterInfo(data);
       renderMpptCombined(data.inverter_summary || {});
       renderArrays(data.array_configurations || {});
@@ -301,16 +301,67 @@
       `;
     }
 
-    function renderModuleInfo(m) {
+    function renderModuleInfo(data) {
       const el = document.getElementById("moduleCard");
-      el.innerHTML = `
-        <h2>PV module</h2>
-        <div class="kvs">
-          <div><span class="key">Manufacturer</span><span class="val">${m.manufacturer || "—"}</span></div>
-          <div><span class="key">Model</span><span class="val">${m.model || "—"}</span></div>
-          <div><span class="key">Unit Nom. Power</span><span class="val">${m.unit_nom_power_w ? m.unit_nom_power_w + " W" : "—"}</span></div>
-        </div>
-      `;
+      const m = data.pv_module || {};
+      const types = Array.isArray(data.module_types) ? data.module_types : [];
+      const arrays = data.array_configurations || {};
+
+      const qtyByTypeId = {};
+      for (const a of Object.values(arrays)) {
+        if (!a || !a.module_type_id) continue;
+        const qty = Number(a.number_of_modules) || 0;
+        qtyByTypeId[a.module_type_id] = (qtyByTypeId[a.module_type_id] || 0) + qty;
+      }
+
+      const hasMultipleTypes = types.length > 1;
+      let html = `<h2>PV modules</h2>`;
+
+      if (!hasMultipleTypes) {
+        const single = types[0] || {};
+        html += `
+          <div class="kvs">
+            <div><span class="key">Manufacturer</span><span class="val">${single.manufacturer || m.manufacturer || "—"}</span></div>
+            <div><span class="key">Model</span><span class="val">${single.model || m.model || "—"}</span></div>
+            <div><span class="key">Unit Nom. Power</span><span class="val">${single.unit_nom_power_w != null ? single.unit_nom_power_w + " W" : (m.unit_nom_power_w ? m.unit_nom_power_w + " W" : "—")}</span></div>
+          </div>
+        `;
+      }
+
+      if (types.length && hasMultipleTypes) {
+        html += `<p class="muted" style="margin-top:0.75rem;">Module models detected</p>`;
+        html += `
+          <table>
+            <thead>
+              <tr>
+                <th>Qty</th>
+                <th>Manufacturer</th>
+                <th>Model</th>
+                <th>W</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${types
+                .slice()
+                .sort((a, b) => (qtyByTypeId[b.id] || 0) - (qtyByTypeId[a.id] || 0))
+                .map(t => {
+                const qty = qtyByTypeId[t.id] || 0;
+                const watts = (t.unit_nom_power_w != null) ? t.unit_nom_power_w : "—";
+                return `
+                  <tr>
+                    <td>${qty ? qty.toLocaleString() : "—"}</td>
+                    <td>${t.manufacturer || "—"}</td>
+                    <td>${t.model || "—"}</td>
+                    <td>${watts}</td>
+                  </tr>
+                `;
+              }).join("")}
+            </tbody>
+          </table>
+        `;
+      }
+
+      el.innerHTML = html;
     }
 
     function renderInverterInfo(data) {
@@ -319,49 +370,50 @@
       const types = Array.isArray(data.inverter_types) ? data.inverter_types : [];
       const invSummary = data.inverter_summary || {};
 
-      const countsByTypeId = {};
+      const qtyByTypeId = {};
       for (const inv of Object.values(invSummary)) {
         const t = inv && inv.inverter_type;
         if (t && t.id) {
-          countsByTypeId[t.id] = (countsByTypeId[t.id] || 0) + 1;
+          qtyByTypeId[t.id] = (qtyByTypeId[t.id] || 0) + 1;
         }
       }
 
+      const hasMultipleTypes = types.length > 1;
       let html = `<h2>Inverters</h2>`;
 
-      const hasGlobal = globalInv && (globalInv.manufacturer || globalInv.model || globalInv.unit_nom_power_kw != null);
-      if (hasGlobal) {
+      if (!hasMultipleTypes) {
+        const single = types[0] || {};
         html += `
-          <p class="muted">Default inverter (from PVsyst equipment table)</p>
           <div class="kvs">
-            <div><span class="key">Manufacturer</span><span class="val">${globalInv.manufacturer || "—"}</span></div>
-            <div><span class="key">Model</span><span class="val">${globalInv.model || "—"}</span></div>
-            <div><span class="key">Unit Nom. Power</span><span class="val">${globalInv.unit_nom_power_kw != null ? globalInv.unit_nom_power_kw + " kW" : "—"}</span></div>
+            <div><span class="key">Manufacturer</span><span class="val">${single.manufacturer || globalInv.manufacturer || "—"}</span></div>
+            <div><span class="key">Model</span><span class="val">${single.model || globalInv.model || "—"}</span></div>
+            <div><span class="key">Unit Nom. Power</span><span class="val">${single.unit_nom_power_kw != null ? single.unit_nom_power_kw + " kW" : (globalInv.unit_nom_power_kw != null ? globalInv.unit_nom_power_kw + " kW" : "—")}</span></div>
           </div>
         `;
       }
 
-      if (types.length) {
+      if (types.length && hasMultipleTypes) {
         html += `<p class="muted" style="margin-top:0.75rem;">Inverter models detected</p>`;
         html += `
           <table>
             <thead>
               <tr>
-                <th>Type ID</th>
-                <th>Count</th>
+                <th>Qty</th>
                 <th>Manufacturer</th>
                 <th>Model</th>
                 <th>kW</th>
               </tr>
             </thead>
             <tbody>
-              ${types.map(t => {
-                const count = countsByTypeId[t.id] || "—";
+              ${types
+                .slice()
+                .sort((a, b) => (qtyByTypeId[b.id] || 0) - (qtyByTypeId[a.id] || 0))
+                .map(t => {
+                const qty = qtyByTypeId[t.id] || 0;
                 const kw = (t.unit_nom_power_kw != null) ? t.unit_nom_power_kw : "—";
                 return `
                   <tr>
-                    <td>${t.id || "—"}</td>
-                    <td>${count}</td>
+                    <td>${qty ? qty.toLocaleString() : "—"}</td>
                     <td>${t.manufacturer || "—"}</td>
                     <td>${t.model || "—"}</td>
                     <td>${kw}</td>
@@ -371,7 +423,7 @@
             </tbody>
           </table>
         `;
-      } else {
+      } else if (!types.length) {
         // Fallback: show distinct inverter types derived from inverter_summary (if present)
         const inferred = new Map();
         for (const inv of Object.values(invSummary)) {
@@ -413,6 +465,15 @@
 
     function renderMpptCombined(invSummary) {
       const el = document.getElementById("mppt");
+      const moduleTypes = Array.isArray(window.lastParsed?.module_types)
+        ? window.lastParsed.module_types
+        : [];
+      const moduleWattsById = {};
+      for (const t of moduleTypes) {
+        if (!t || !t.id) continue;
+        if (t.unit_nom_power_w != null) moduleWattsById[t.id] = t.unit_nom_power_w;
+      }
+
       if (!invSummary || Object.keys(invSummary).length === 0) {
         el.innerHTML = "<p class='muted'>No MPPT configuration found.</p>";
         return;
@@ -442,6 +503,7 @@
           <tr>
             <th>MPPT</th>
             <th>Config</th>
+            <th>Module Wattage</th>
             <th>Strings</th>
             <th>Modules</th>
             <th>Mods/Str</th>
@@ -460,6 +522,7 @@
           tr.innerHTML = `
             <td>${row.mppt ?? "—"}</td>
             <td>${row.config_id ?? "—"}</td>
+            <td>${moduleWattsById[row.module_type_id] != null ? moduleWattsById[row.module_type_id] + " W" : "—"}</td>
             <td>${row.strings ?? "—"}</td>
             <td>${row.modules ?? "—"}</td>
             <td>${row.modules_in_series ?? "—"}</td>

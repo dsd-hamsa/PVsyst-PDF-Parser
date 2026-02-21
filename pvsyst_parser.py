@@ -81,6 +81,7 @@ class PVsystParser:
         self.inverter_summary: Dict[str, Any] = {}
 
         self.array_losses: Dict[str, Any] = {}
+        self.module_types: List[Dict[str, Any]] = []
         self.inverter_types: List[Dict[str, Any]] = []
 
     # -------------------------------------------------------------------------
@@ -230,6 +231,208 @@ class PVsystParser:
             return value
         return value
 
+    @staticmethod
+    def _value_after_label(line: str, label_pattern: str) -> Optional[str]:
+        if not line:
+            return None
+        m = re.search(rf"{label_pattern}\s+(.+)$", line, re.IGNORECASE)
+        if not m:
+            return None
+        v = m.group(1).strip()
+        return v or None
+
+    @staticmethod
+    def _is_inverter_power(text: str) -> bool:
+        s = str(text or "").lower()
+        return any(tok in s for tok in ["kw", "mw", "kva", "mva", "wac"])
+
+    @staticmethod
+    def _is_module_power(text: str) -> bool:
+        s = str(text or "").lower()
+        if "wp" in s:
+            return True
+        return ("w" in s) and not any(
+            tok in s for tok in ["kw", "mw", "kva", "mva", "wac"]
+        )
+
+    def _parse_power_line_values(
+        self, line: str
+    ) -> Tuple[Optional[str], Optional[str]]:
+        """Return (module_power_raw, inverter_power_raw) from a single power line."""
+        if not line:
+            return (None, None)
+
+        left, right = self._two_column_values(line, "Unit Nom. Power")
+        if left is None and right is None:
+            left, right = self._two_column_values(line, "Unit Nom Power")
+
+        # Repeated two-column label row: left is module and right is inverter.
+        if right is not None:
+            return (left, right)
+
+        only = left
+        if not only:
+            return (None, None)
+
+        if self._is_module_power(only):
+            return (only, None)
+        if self._is_inverter_power(only):
+            return (None, only)
+        return (only, None)
+
+    def _parse_pvsyst_equipment_block(self, text: str) -> Dict[str, Any]:
+        """Parse PV module + inverter equipment fields from a PVsyst equipment block."""
+        if not text:
+            return {}
+
+        lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+        if not lines:
+            return {}
+
+        out: Dict[str, Any] = {}
+
+        # Sectioned parsing when explicit "PV module" / "Inverter" headers exist.
+        pv_idx = next(
+            (
+                i
+                for i, ln in enumerate(lines)
+                if re.fullmatch(r"PV\s*module", ln, re.IGNORECASE)
+            ),
+            None,
+        )
+        inv_idx = next(
+            (
+                i
+                for i, ln in enumerate(lines)
+                if re.fullmatch(r"Inverter", ln, re.IGNORECASE)
+            ),
+            None,
+        )
+
+        pv_lines: List[str] = []
+        inv_lines: List[str] = []
+        if pv_idx is not None and inv_idx is not None:
+            if pv_idx < inv_idx:
+                pv_lines = lines[pv_idx:inv_idx]
+                inv_lines = lines[inv_idx:]
+            else:
+                inv_lines = lines[inv_idx:pv_idx]
+                pv_lines = lines[pv_idx:]
+
+        def first_value(
+            section_lines: List[str], label: str, *, side: str
+        ) -> Optional[str]:
+            for ln in section_lines:
+                left, right = self._two_column_values(ln, label)
+                if right is not None:
+                    v = left if side == "left" else right
+                else:
+                    v = self._value_after_label(ln, re.escape(label))
+                if v:
+                    return v
+            return None
+
+        if pv_lines:
+            v = first_value(pv_lines, "Manufacturer", side="left")
+            if v:
+                out["module_manufacturer"] = v
+            v = first_value(pv_lines, "Model", side="left")
+            if v:
+                out["module_model"] = v
+            for ln in pv_lines:
+                if re.search(r"Unit\s+Nom\.?\s*Power", ln, re.IGNORECASE):
+                    module_raw, _ = self._parse_power_line_values(ln)
+                    if module_raw:
+                        out["module_unit_nom_power_raw"] = module_raw
+                        n = clean_power_to_kw_or_w(module_raw)
+                        if n is not None:
+                            s = module_raw.lower()
+                            if "mw" in s:
+                                out["module_unit_nom_power_w"] = int(
+                                    round(n * 1_000_000)
+                                )
+                            elif "kw" in s:
+                                out["module_unit_nom_power_w"] = int(round(n * 1_000))
+                            else:
+                                out["module_unit_nom_power_w"] = int(round(n))
+                        break
+
+        if inv_lines:
+            v = first_value(inv_lines, "Manufacturer", side="right")
+            if v:
+                out["inverter_manufacturer"] = v
+            v = first_value(inv_lines, "Model", side="right")
+            if v:
+                out["inverter_model"] = v
+            for ln in inv_lines:
+                if re.search(r"Unit\s+Nom\.?\s*Power", ln, re.IGNORECASE):
+                    _, inverter_raw = self._parse_power_line_values(ln)
+                    if inverter_raw:
+                        out["inverter_unit_nom_power_raw"] = inverter_raw
+                        kw = self.clean_nom_power(inverter_raw)
+                        if kw is not None:
+                            out["inverter_unit_nom_power_kw"] = kw
+                        break
+
+        # Fallback for two-column merged rows (global equipment table).
+        if not out.get("module_manufacturer") or not out.get("inverter_manufacturer"):
+            manu_line = next(
+                (
+                    ln
+                    for ln in lines
+                    if re.search(r"\bManufacturer\b", ln, re.IGNORECASE)
+                ),
+                None,
+            )
+            if manu_line:
+                left, right = self._two_column_values(manu_line, "Manufacturer")
+                if left and not out.get("module_manufacturer"):
+                    out["module_manufacturer"] = left
+                if right and not out.get("inverter_manufacturer"):
+                    out["inverter_manufacturer"] = right
+
+        if not out.get("module_model") or not out.get("inverter_model"):
+            model_line = next(
+                (ln for ln in lines if re.search(r"\bModel\b", ln, re.IGNORECASE)),
+                None,
+            )
+            if model_line:
+                left, right = self._two_column_values(model_line, "Model")
+                if left and not out.get("module_model"):
+                    out["module_model"] = left
+                if right and not out.get("inverter_model"):
+                    out["inverter_model"] = right
+
+        power_lines = [
+            ln for ln in lines if re.search(r"Unit\s+Nom\.?\s*Power", ln, re.IGNORECASE)
+        ]
+        for ln in power_lines:
+            module_raw, inverter_raw = self._parse_power_line_values(ln)
+            if module_raw and not out.get("module_unit_nom_power_raw"):
+                out["module_unit_nom_power_raw"] = module_raw
+                n = clean_power_to_kw_or_w(module_raw)
+                if n is not None:
+                    s = module_raw.lower()
+                    if "mw" in s:
+                        out["module_unit_nom_power_w"] = int(round(n * 1_000_000))
+                    elif "kw" in s:
+                        out["module_unit_nom_power_w"] = int(round(n * 1_000))
+                    else:
+                        out["module_unit_nom_power_w"] = int(round(n))
+
+            if inverter_raw and not out.get("inverter_unit_nom_power_raw"):
+                out["inverter_unit_nom_power_raw"] = inverter_raw
+                kw = self.clean_nom_power(inverter_raw)
+                if kw is not None:
+                    out["inverter_unit_nom_power_kw"] = kw
+
+            if out.get("module_unit_nom_power_raw") and out.get(
+                "inverter_unit_nom_power_raw"
+            ):
+                break
+
+        return out
+
     def extract_equipment_info(
         self, blocks: Dict[int, Dict[str, Any]]
     ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
@@ -249,61 +452,25 @@ class PVsystParser:
             return module_info, inverter_info
 
         block = "PV module\n" + m.group(1)
-        lines = [ln.strip() for ln in block.splitlines() if ln.strip()]
+        parsed = self._parse_pvsyst_equipment_block(block)
 
-        manu_line = next(
-            (ln for ln in lines if re.search(r"\bManufacturer\b", ln, re.IGNORECASE)),
-            None,
-        )
-        if manu_line:
-            left, right = self._two_column_values(manu_line, "Manufacturer")
-            if left:
-                module_info["manufacturer"] = left
-            if right:
-                inverter_info["manufacturer"] = right
+        if parsed.get("module_manufacturer"):
+            module_info["manufacturer"] = parsed["module_manufacturer"]
+        if parsed.get("module_model"):
+            module_info["model"] = parsed["module_model"]
+        if parsed.get("module_unit_nom_power_raw"):
+            module_info["unit_nom_power_raw"] = parsed["module_unit_nom_power_raw"]
+        if parsed.get("module_unit_nom_power_w") is not None:
+            module_info["unit_nom_power_w"] = parsed["module_unit_nom_power_w"]
 
-        model_line = next(
-            (ln for ln in lines if re.search(r"\bModel\b", ln, re.IGNORECASE)), None
-        )
-        if model_line:
-            left, right = self._two_column_values(model_line, "Model")
-            if left:
-                module_info["model"] = left
-            if right:
-                inverter_info["model"] = right
-
-        power_line = next(
-            (
-                ln
-                for ln in lines
-                if re.search(r"Unit\s+Nom\.?\s*Power", ln, re.IGNORECASE)
-            ),
-            None,
-        )
-        if power_line:
-            left, right = self._two_column_values(power_line, "Unit Nom. Power")
-            if left is None and right is None:
-                left, right = self._two_column_values(power_line, "Unit Nom Power")
-
-            if left:
-                module_info["unit_nom_power_raw"] = left
-                numeric = clean_power_to_kw_or_w(left)
-                if numeric is not None:
-                    lower_left = left.lower()
-                    if "mw" in lower_left:
-                        module_info["unit_nom_power_w"] = int(
-                            round(numeric * 1_000_000)
-                        )
-                    elif "kw" in lower_left:
-                        module_info["unit_nom_power_w"] = int(round(numeric * 1_000))
-                    else:
-                        module_info["unit_nom_power_w"] = int(round(numeric))
-
-            if right:
-                inverter_info["unit_nom_power_raw"] = right
-                numeric = clean_power_to_kw_or_w(right)
-                if numeric is not None:
-                    inverter_info["unit_nom_power_kw"] = numeric
+        if parsed.get("inverter_manufacturer"):
+            inverter_info["manufacturer"] = parsed["inverter_manufacturer"]
+        if parsed.get("inverter_model"):
+            inverter_info["model"] = parsed["inverter_model"]
+        if parsed.get("inverter_unit_nom_power_raw"):
+            inverter_info["unit_nom_power_raw"] = parsed["inverter_unit_nom_power_raw"]
+        if parsed.get("inverter_unit_nom_power_kw") is not None:
+            inverter_info["unit_nom_power_kw"] = parsed["inverter_unit_nom_power_kw"]
 
         self.module_info = module_info
         self.inverter_info = inverter_info
@@ -504,68 +671,8 @@ class PVsystParser:
         return combos
 
     def _parse_pvsyst_inverter_type_block(self, text: str) -> Dict[str, Any]:
-        """Parse a PVsyst equipment block between arrays; return inverter fields only."""
-        if not text:
-            return {}
-
-        lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
-        if not lines:
-            return {}
-
-        inv_idx: Optional[int] = None
-        for i, ln in enumerate(lines):
-            if re.fullmatch(r"Inverter", ln, flags=re.IGNORECASE):
-                inv_idx = i
-                break
-        if inv_idx is None:
-            for i, ln in enumerate(lines):
-                if re.search(r"\bInverter\b", ln, flags=re.IGNORECASE):
-                    inv_idx = i
-                    break
-        if inv_idx is None:
-            return {}
-
-        inv_lines = lines[inv_idx:]
-        out: Dict[str, Any] = {}
-
-        manu_line = next(
-            (
-                ln
-                for ln in inv_lines
-                if re.search(r"\bManufacturer\b", ln, re.IGNORECASE)
-            ),
-            None,
-        )
-        if manu_line:
-            v = self._second_column_value(manu_line, "Manufacturer")
-            if v:
-                out["inverter_manufacturer"] = v
-
-        model_line = next(
-            (ln for ln in inv_lines if re.search(r"\bModel\b", ln, re.IGNORECASE)), None
-        )
-        if model_line:
-            v = self._second_column_value(model_line, "Model")
-            if v:
-                out["inverter_model"] = v
-
-        power_line = next(
-            (
-                ln
-                for ln in inv_lines
-                if re.search(r"Unit\s+Nom\.?\s*Power", ln, re.IGNORECASE)
-            ),
-            None,
-        )
-        if power_line:
-            v = self._second_column_value(power_line, r"Unit\s+Nom\.?\s*Power")
-            if v:
-                out["inverter_unit_nom_power_raw"] = v
-                kw = self.clean_nom_power(v)
-                if kw is not None:
-                    out["inverter_unit_nom_power_kw"] = kw
-
-        return out
+        """Backward-compatible wrapper for PVsyst equipment block parsing."""
+        return self._parse_pvsyst_equipment_block(text)
 
     def _parse_array_block(self, section_text: str, array_id: str) -> Dict[str, Any]:
         array_data: Dict[str, Any] = {
@@ -1078,7 +1185,7 @@ class PVsystParser:
 
         arrays: Dict[str, Dict[str, Any]] = {}
         seen_ids: set[str] = set()
-        pending_inverter_type: Dict[str, Any] = {}
+        pending_equipment_type: Dict[str, Any] = {}
 
         for match in array_pattern.finditer(combined_text):
             block_text = match.group(1)
@@ -1102,11 +1209,10 @@ class PVsystParser:
 
             array_data = self._parse_array_block(block_text, array_id)
 
-            if pending_inverter_type and array_data.get("inverter_id"):
-                if not array_data.get("inverter_model") and not array_data.get(
-                    "inverter_manufacturer"
-                ):
-                    array_data.update(pending_inverter_type)
+            if pending_equipment_type and array_data.get("inverter_id"):
+                for k, v in pending_equipment_type.items():
+                    if k not in array_data or array_data.get(k) in (None, ""):
+                        array_data[k] = v
 
             if interactive:
                 header_line = array_data.get("original_block_text", "").splitlines()[0]
@@ -1125,9 +1231,12 @@ class PVsystParser:
             seen_ids.add(array_id)
 
             if trailing_equipment:
-                parsed_type = self._parse_pvsyst_inverter_type_block(trailing_equipment)
+                parsed_type = self._parse_pvsyst_equipment_block(trailing_equipment)
                 if parsed_type:
-                    pending_inverter_type = parsed_type
+                    for k, v in parsed_type.items():
+                        if k not in array_data or array_data.get(k) in (None, ""):
+                            array_data[k] = v
+                    pending_equipment_type = parsed_type
 
         # Fallback: PVsyst reports with a single configuration and no Array # blocks
         if not arrays:
@@ -1417,6 +1526,45 @@ class PVsystParser:
     # -------------------------------------------------------------------------
     # Inverter types / production
     # -------------------------------------------------------------------------
+
+    def _collect_module_types(self) -> List[Dict[str, Any]]:
+        types: Dict[Tuple[str, str, int], Dict[str, Any]] = {}
+        type_counter = 1
+
+        for arr_data in self.arrays.values():
+            man = arr_data.get("module_manufacturer")
+            mod = arr_data.get("module_model")
+            power = arr_data.get("module_unit_nom_power_w")
+            if man or mod or power is not None:
+                key = (man or "", mod or "", int(power or 0))
+                if key not in types:
+                    type_id = f"module_{type_counter}"
+                    types[key] = {
+                        "id": type_id,
+                        "manufacturer": man,
+                        "model": mod,
+                        "unit_nom_power_w": power,
+                    }
+                    type_counter += 1
+                arr_data["module_type_id"] = types[key]["id"]
+
+        global_man = self.module_info.get("manufacturer")
+        global_mod = self.module_info.get("model")
+        global_power = self.module_info.get("unit_nom_power_w")
+        if global_man or global_mod or global_power is not None:
+            key = (global_man or "", global_mod or "", int(global_power or 0))
+            if key not in types:
+                type_id = f"module_{type_counter}"
+                types[key] = {
+                    "id": type_id,
+                    "manufacturer": global_man,
+                    "model": global_mod,
+                    "unit_nom_power_w": global_power,
+                }
+            for arr_data in self.arrays.values():
+                arr_data.setdefault("module_type_id", types[key]["id"])
+
+        return list(types.values())
 
     def _collect_inverter_types(self) -> List[Dict[str, Any]]:
         types: Dict[Tuple[str, str, float], Dict[str, Any]] = {}
@@ -1837,14 +1985,28 @@ class PVsystParser:
                 continue
             mppt = str(mppt)
             config_id = str(combo["array_id"])
+            arr = self.arrays.get(config_id, {})
+            module_type_id = arr.get("module_type_id")
+            inverter_type_id = arr.get("inverter_type_id")
 
             raw_associations.setdefault(inv_id, {})
             alloc = mppt_allocation.get((inv_id, mppt, config_id), {})
-            raw_associations[inv_id][mppt] = {"config_id": config_id, **alloc}
+            raw_associations[inv_id][mppt] = {
+                "config_id": config_id,
+                "module_type_id": module_type_id,
+                "inverter_type_id": inverter_type_id,
+                **alloc,
+            }
 
         # Keep raw inverter IDs as keys in JSON.
         associations: Dict[str, Dict[str, Dict[str, Any]]] = raw_associations
         self.associations = associations
+
+        module_type_by_id: Dict[str, Dict[str, Any]] = {
+            str(t.get("id")): t
+            for t in self.module_types
+            if isinstance(t, dict) and t.get("id") is not None
+        }
 
         type_by_id: Dict[str, Dict[str, Any]] = {
             str(t.get("id")): t
@@ -1881,6 +2043,8 @@ class PVsystParser:
             for mppt, assoc in sorted(raw_associations[inv_id].items()):
                 config_id = str(assoc.get("config_id"))
                 arr = self.arrays.get(config_id, {})
+                module_type_id = arr.get("module_type_id")
+                inverter_type_id = arr.get("inverter_type_id")
 
                 strings_total = arr.get("strings")
                 strings_on_mppt = assoc.get("strings")
@@ -1902,6 +2066,8 @@ class PVsystParser:
                     {
                         "mppt": mppt,
                         "config_id": config_id,
+                        "module_type_id": module_type_id,
+                        "inverter_type_id": inverter_type_id,
                         "strings": strings_on_mppt,
                         "modules": assoc.get("modules"),
                         "dc_kwp": assoc.get("dc_kwp"),
@@ -1915,9 +2081,24 @@ class PVsystParser:
                     }
                 )
 
+            module_type_ids = sorted(
+                {
+                    str(r.get("module_type_id"))
+                    for r in combined
+                    if r.get("module_type_id") is not None
+                }
+            )
+            pv_modules = [
+                module_type_by_id[mid]
+                for mid in module_type_ids
+                if mid in module_type_by_id
+            ]
+            pv_module = pv_modules[0] if len(pv_modules) == 1 else None
+
             inverter_summary[inv_id] = {
                 "description": description,
-                "pv_module": self.module_info,
+                "pv_module": pv_module,
+                "pv_modules": pv_modules,
                 "inverter_type": inv_type,
                 "capacity_kwp": cap,
                 "annual_production_kwh": annual,
@@ -1942,7 +2123,7 @@ class PVsystParser:
 
         return {
             "metadata": {
-                "version": "v3.0.2",
+                "version": "v3.0.3",
                 "total_arrays": len(self.arrays),
                 "total_expanded_combinations": len(self.expanded_arrays),
                 "total_inverters": len(associations),
@@ -1951,6 +2132,7 @@ class PVsystParser:
             },
             "pv_module": self.module_info,
             "inverter": self.inverter_info,
+            "module_types": self.module_types,
             "inverter_types": self.inverter_types,
             "array_configurations": array_configurations,
             "associations": associations,
@@ -2212,7 +2394,8 @@ class PVsystParser:
         # Arrays
         self.arrays = self.parse_arrays_from_text(blocks, interactive=interactive)
 
-        # Inverter types
+        # Module and inverter types
+        self.module_types = self._collect_module_types()
         self.inverter_types = self._collect_inverter_types()
 
         # Monthly production + inverter capacities

@@ -1,4 +1,4 @@
-"""API for parsing PVsyst PDF files (V3.0.2).
+"""API for parsing PVsyst PDF files (V3.0.3).
 
 This API is a thin wrapper around `pvsyst_parser.py`.
 It returns the V3 JSON structure without writing output files to disk.
@@ -13,7 +13,7 @@ from fastapi.responses import JSONResponse
 
 from pvsyst_parser import PVsystParser
 
-app = FastAPI(title="PVsyst Parser API (V3.0.2)")
+app = FastAPI(title="PVsyst Parser API (V3.0.3)")
 
 app.add_middleware(
     CORSMiddleware,
@@ -68,6 +68,7 @@ async def parse_pvsyst_pdf(file: UploadFile = File(...)):
                 parser.array_losses = {}
 
         parser.arrays = parser.parse_arrays_from_text(blocks, interactive=False)
+        parser.module_types = parser._collect_module_types()
         parser.inverter_types = parser._collect_inverter_types()
         parser.calculate_monthly_production(blocks)
 
