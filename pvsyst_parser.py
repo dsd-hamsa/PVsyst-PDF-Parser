@@ -703,6 +703,14 @@ class PVsystParser:
 
         header_line = section_text.splitlines()[0] if section_text.splitlines() else ""
 
+        m_array_label = re.search(
+            r"Array\s*#?\s*\d+\s*-\s*([A-Za-z0-9_.-]+)",
+            header_line,
+            re.IGNORECASE,
+        )
+        if m_array_label:
+            array_data["array_label"] = m_array_label.group(1).strip()
+
         inverter_ids: List[str] = []
 
         # Prefer INV ... MPPT header notation (better for complex ranges).
@@ -738,6 +746,20 @@ class PVsystParser:
                 num = int(m_inv_simple.group(2))
                 inverter_ids = [f"INV{prefix}{num:02d}"]
 
+        if not inverter_ids:
+            m_inv_count = re.search(
+                r"Number of inverters\s*(\d+)\s*units?",
+                section_text,
+                re.IGNORECASE,
+            )
+            if m_inv_count:
+                inv_count = int(m_inv_count.group(1))
+                if inv_count > 0:
+                    inverter_ids = [
+                        f"INV{array_id}{i:02d}" for i in range(1, inv_count + 1)
+                    ]
+                    array_data["inverter_ids_inferred"] = True
+
         if inverter_ids:
             array_data["inverter_ids"] = inverter_ids
             array_data["inverter_id"] = inverter_ids[0]
@@ -768,6 +790,12 @@ class PVsystParser:
             array_data["mppt_count"] = mppt_per_inv
             array_data["mppt_share_percent"] = float(m_mppt.group(2))
             array_data["inverter_unit_fraction"] = float(m_mppt.group(3))
+
+        if not array_data.get("mppt_ids") and not array_data.get("mppt_count"):
+            topology = self._infer_mppt_topology()
+            if topology and topology.get("mppt_per_inverter"):
+                array_data["mppt_count"] = int(topology["mppt_per_inverter"])
+                array_data["mppt_count_inferred"] = True
 
         # Orientation #n inside the block
         m_ori = re.search(r"Orientation\s*#?\s*(\d+)", section_text, re.IGNORECASE)
@@ -2143,7 +2171,7 @@ class PVsystParser:
 
         return {
             "metadata": {
-                "version": "v3.0.4",
+                "version": "v3.0.5",
                 "total_arrays": len(self.arrays),
                 "total_expanded_combinations": len(self.expanded_arrays),
                 "total_inverters": len(associations),
