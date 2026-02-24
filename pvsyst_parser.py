@@ -577,6 +577,26 @@ class PVsystParser:
             if "INV" not in part.upper():
                 part = "INV " + part
 
+            # Some PVsyst/OCR headers collapse comma-separated inverter specs
+            # into chained hyphen notation, e.g. "INV1-2-5" instead of
+            # "INV1-2,5". Interpret this as first range + trailing singles.
+            m_chain = re.search(
+                r"(?:[A-Za-z0-9]+_)?INV\s*([A-Za-z]*)(\d+(?:\s*-\s*\d+){2,})$",
+                part,
+                re.IGNORECASE,
+            )
+            if m_chain:
+                prefix = m_chain.group(1)
+                nums = [int(n) for n in re.findall(r"\d+", m_chain.group(2))]
+                if len(nums) >= 2:
+                    start, end = nums[0], nums[1]
+                    step = 1 if end >= start else -1
+                    for i in range(start, end + step, step):
+                        inverters.append(f"INV{prefix}{i:02d}")
+                    for num in nums[2:]:
+                        inverters.append(f"INV{prefix}{num:02d}")
+                    continue
+
             m_range = re.search(
                 r"(?:[A-Za-z0-9]+_)?INV\s*([A-Za-z]*)(\d+)\s*-\s*(?:(?:[A-Za-z0-9]+_)?INV\s*)?([A-Za-z]*)(\d+)",
                 part,
@@ -2123,7 +2143,7 @@ class PVsystParser:
 
         return {
             "metadata": {
-                "version": "v3.0.3",
+                "version": "v3.0.4",
                 "total_arrays": len(self.arrays),
                 "total_expanded_combinations": len(self.expanded_arrays),
                 "total_inverters": len(associations),
